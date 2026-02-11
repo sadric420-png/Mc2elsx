@@ -31,12 +31,8 @@ export default function App() {
   useEffect(() => {
     const loadPdfLib = async () => {
       if (!pdfjsLib) {
-        try {
-          pdfjsLib = await import('pdfjs-dist');
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
-        } catch (e) {
-          console.error("PDF.js worker load failed", e);
-        }
+        pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
       }
     };
     loadPdfLib();
@@ -306,27 +302,19 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100 selection:bg-indigo-100 selection:text-indigo-900">
-      <nav className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-xl border-b-4 border-indigo-500 sticky top-0 z-50">
+    <div className="min-h-screen flex flex-col bg-slate-100">
+      <nav className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-xl border-b-4 border-indigo-500">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2 rounded-lg transition-transform hover:rotate-3"><i className="fas fa-chart-line text-xl"></i></div>
+          <div className="bg-indigo-600 p-2 rounded-lg transition-transform hover:scale-110"><i className="fas fa-chart-line text-xl"></i></div>
           <div>
             <h1 className="text-lg font-bold tracking-tight uppercase">Sales Operations Analyst</h1>
-            <p className="text-[10px] text-slate-400 font-mono tracking-tighter">Automation Specialist | Excel Automation v4.2.0</p>
+            <p className="text-[10px] text-slate-400 font-mono">Automation Specialist | Excel Specialist</p>
           </div>
         </div>
         <div className="hidden md:flex items-center gap-6 text-sm">
           <div className="flex flex-col items-end">
-            <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Active SO</span>
-            <span className="font-bold text-indigo-400">{REPORTING_CONSTANTS.SALES_PERSON}</span>
-          </div>
-          <div className="h-8 w-[1px] bg-slate-700"></div>
-          <div className="flex flex-col items-end">
-            <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Status</span>
-            <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-              VERCEL_ONLINE
-            </span>
+            <span className="text-slate-400 text-xs">SO Name</span>
+            <span className="font-bold">{REPORTING_CONSTANTS.SALES_PERSON}</span>
           </div>
         </div>
       </nav>
@@ -346,7 +334,7 @@ export default function App() {
                 className="flex flex-col items-center relative z-10 focus:outline-none group transition"
               >
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 border-4 shadow-sm ${
-                  step === s.id ? 'bg-indigo-600 border-indigo-200 text-white scale-110 shadow-indigo-200/50 shadow-lg' : 'bg-white border-slate-200 text-slate-400 group-hover:border-indigo-300'
+                  step === s.id ? 'bg-indigo-600 border-indigo-200 text-white scale-110' : 'bg-white border-slate-200 text-slate-400 group-hover:border-indigo-300'
                 }`}>
                   <i className={`fas ${s.icon}`}></i>
                 </div>
@@ -359,7 +347,7 @@ export default function App() {
           <div className="absolute top-6 left-1/2 -translate-x-1/2 w-full max-w-2xl h-1 bg-slate-200 -z-0"></div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden ring-1 ring-slate-900/5">
+        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
           
           {step === ReportStep.TC_ENTRY && (
             <div className="p-8">
@@ -368,14 +356,14 @@ export default function App() {
                   <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
                     <i className="fas fa-file-excel text-indigo-600"></i> Phase 1: TC Data Ingestion
                   </h2>
-                  <p className="text-slate-500 mt-1">Upload call list or enter manual calls for automated processing.</p>
+                  <p className="text-slate-500 mt-1">Upload call list or enter manual calls.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={downloadSampleXLSX} className="bg-white text-indigo-600 border-2 border-indigo-600 px-4 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-50 transition flex items-center gap-2 shadow-sm">
                     <i className="fas fa-download"></i> SAMPLE XLSX
                   </button>
                   <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" ref={fileInputRef} />
-                  <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-700 transition flex items-center gap-2 shadow-lg hover:shadow-emerald-200/50">
+                  <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-700 transition flex items-center gap-2 shadow-lg">
                     <i className="fas fa-upload"></i> UPLOAD TC DATA
                   </button>
                 </div>
@@ -384,14 +372,14 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-xl border border-dashed border-slate-300">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Outlet Name *</label>
-                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Outlet Name" />
+                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none transition" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Outlet Name" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Contact No *</label>
-                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Phone" />
+                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none transition" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Phone" />
                 </div>
                 <div className="flex items-end">
-                  <button onClick={handleAddOutlet} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-lg hover:bg-slate-800 transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest text-xs active:scale-95">
+                  <button onClick={handleAddOutlet} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-lg hover:bg-slate-800 transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest text-xs">
                     <i className="fas fa-plus"></i> Add Entry
                   </button>
                 </div>
@@ -404,21 +392,18 @@ export default function App() {
                   </thead>
                   <tbody className="text-sm divide-y">
                     {outlets.map((o, i) => (
-                      <tr key={o.id} className="hover:bg-indigo-50/50 transition">
+                      <tr key={o.id} className="hover:bg-indigo-50 transition">
                         <td className="px-6 py-4 text-slate-400 font-mono">{i + 1}</td>
                         <td className="px-6 py-4 font-bold text-slate-800">{o.name}</td>
                         <td className="px-6 py-4 text-slate-600">{o.contactNo}</td>
                         <td className="px-6 py-4 text-center"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600 transition"><i className="fas fa-trash-alt"></i></button></td>
                       </tr>
                     ))}
-                    {outlets.length === 0 && (
-                      <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">Pehle outlets add kijiye ya excel upload kijiye.</td></tr>
-                    )}
                   </tbody>
                 </table>
               </div>
               <div className="mt-10 flex justify-end">
-                <button disabled={outlets.length === 0} onClick={() => setStep(ReportStep.PC_ENTRY)} className={`px-10 py-4 rounded-xl font-black text-white shadow-xl flex items-center gap-3 transition ${outlets.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
+                <button disabled={outlets.length === 0} onClick={() => setStep(ReportStep.PC_ENTRY)} className={`px-10 py-4 rounded-xl font-black text-white shadow-xl flex items-center gap-3 transition ${outlets.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
                   NEXT: PRODUCTIVE CALLS <i className="fas fa-arrow-right"></i>
                 </button>
               </div>
@@ -430,7 +415,7 @@ export default function App() {
               <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-800">Step 2: PC & SKU Automation</h2>
-                  <p className="text-slate-500 mt-1">Mark productive calls manually or use our PDF AI to extract data automatically.</p>
+                  <p className="text-slate-500 mt-1">Mark productive calls manually or upload a PDF Sales Report for auto-fill.</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <input type="file" accept=".pdf" onChange={handlePdfUpload} className="hidden" ref={pdfInputRef} />
@@ -442,16 +427,16 @@ export default function App() {
                     {isProcessingPdf ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-pdf"></i>}
                     {isProcessingPdf ? 'READING PDF...' : 'UPLOAD SALES PDF (AUTO-FILL)'}
                   </button>
-                  <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Analyst Logic: Multi-Page Support Active</span>
+                  <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Supports multiple pages</span>
                 </div>
               </div>
 
               <div className="space-y-6">
                 {outlets.map((o) => (
-                  <div key={o.id} className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${o.isProductive ? 'border-green-200 shadow-lg scale-[1.01]' : 'border-slate-100 shadow-sm opacity-80'}`}>
-                    <div className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${o.isProductive ? 'bg-green-50/50' : 'bg-slate-50'}`}>
+                  <div key={o.id} className={`border-2 rounded-xl overflow-hidden transition ${o.isProductive ? 'border-green-200 shadow-md scale-[1.01]' : 'border-slate-100 shadow-sm'}`}>
+                    <div className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${o.isProductive ? 'bg-green-50' : 'bg-slate-50'}`}>
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white transition-all ${o.isProductive ? 'bg-green-600 shadow-green-200 shadow-lg' : 'bg-slate-400'}`}>{o.name.charAt(0)}</div>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white transition-colors ${o.isProductive ? 'bg-green-600 shadow-lg' : 'bg-slate-400'}`}>{o.name.charAt(0)}</div>
                         <div>
                           <h3 className="font-black text-slate-800 uppercase text-sm tracking-tight">{o.name}</h3>
                           <div className="text-xs text-slate-500">Phone: {o.contactNo}</div>
@@ -465,11 +450,11 @@ export default function App() {
                       </div>
                     </div>
                     {o.isProductive && (
-                      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 bg-white animate-in zoom-in-95 duration-200">
+                      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 bg-white animate-in slide-in-from-top-1 duration-200">
                         {SKU_LIST.map(sku => (
                           <div key={sku.id} className="space-y-1">
                             <label className="text-[9px] font-black text-slate-400 uppercase block">{sku.label}</label>
-                            <input type="number" min="0" value={o.skus[sku.id]} onChange={e => handleUpdateSKU(o.id, sku.id, Math.max(0, parseInt(e.target.value) || 0))} className="w-full p-2 border-2 border-slate-100 rounded text-sm font-bold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-50 outline-none transition" placeholder="0" />
+                            <input type="number" min="0" value={o.skus[sku.id]} onChange={e => handleUpdateSKU(o.id, sku.id, Math.max(0, parseInt(e.target.value) || 0))} className="w-full p-2 border-2 border-slate-100 rounded text-sm font-bold focus:border-indigo-500 outline-none transition" placeholder="0" />
                           </div>
                         ))}
                       </div>
@@ -479,7 +464,7 @@ export default function App() {
               </div>
               <div className="mt-10 pt-10 border-t flex justify-between items-center">
                 <button onClick={() => setStep(ReportStep.TC_ENTRY)} className="px-8 py-3 rounded-xl font-bold text-slate-600 border-2 hover:bg-slate-50 transition uppercase text-xs">BACK TO TC</button>
-                <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="px-10 py-4 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl uppercase tracking-widest text-xs transition active:scale-95 shadow-indigo-200">GENERATE F2 DETAIL</button>
+                <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="px-10 py-4 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl uppercase tracking-widest text-xs transition transform active:scale-95">GENERATE F2 DETAIL</button>
               </div>
             </div>
           )}
@@ -489,13 +474,13 @@ export default function App() {
               <div className="mb-8 flex justify-between items-end">
                 <div>
                   <h2 className="text-3xl font-black text-slate-800">F2: Daily Sales Detail</h2>
-                  <p className="text-slate-500">Cross-verified audit logs for individual outlet performance.</p>
+                  <p className="text-slate-500">Review total order values before final submission.</p>
                 </div>
                 <button onClick={() => exportXLSX(f2Data, `F2_Report_${currentDate.replace(/\//g, '-')}.xlsx`, "F2", true)} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-xs hover:bg-slate-800 transition shadow-lg uppercase tracking-widest">
                   DOWNLOAD F2 XLSX
                 </button>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-inner">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
                 <table className="w-full border-collapse min-w-[2000px]">
                   <thead className="bg-slate-900 text-white text-[9px] font-black uppercase tracking-tighter">
                     <tr>
@@ -517,18 +502,18 @@ export default function App() {
                   </thead>
                   <tbody className="text-[10px] font-bold">
                     {f2Data.map((row, i) => (
-                      <tr key={i} className={`transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50/40`}>
-                        <td className="p-3 border sticky left-0 bg-inherit shadow-sm font-mono">{row.date}</td>
+                      <tr key={i} className={`transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50/30`}>
+                        <td className="p-3 border sticky left-0 bg-inherit shadow-sm">{row.date}</td>
                         <td className="p-3 border">{row.salesPerson}</td>
                         <td className="p-3 border">{row.desig}</td>
                         <td className="p-3 border">{row.manager}</td>
                         <td className="p-3 border">{row.city}</td>
                         <td className="p-3 border">{row.ss}</td>
-                        <td className="p-3 border font-black text-indigo-900">{row.dbName}</td>
+                        <td className="p-3 border">{row.dbName}</td>
                         <td className="p-3 border">{row.beatName}</td>
-                        <td className="p-3 border text-indigo-700 uppercase font-black">{row.name}</td>
+                        <td className="p-3 border text-indigo-700 uppercase">{row.name}</td>
                         <td className="p-3 border">{row.contactPerson}</td>
-                        <td className="p-3 border font-mono">{row.contactNo}</td>
+                        <td className="p-3 border">{row.contactNo}</td>
                         {SKU_LIST.map(s => (<td key={s.id} className={`p-3 border text-center font-bold ${row.skus[s.id] > 0 ? 'text-indigo-600 bg-indigo-50/20' : 'text-slate-400'}`}>{row.skus[s.id] || '-'}</td>))}
                         <td className="p-3 border text-center font-black bg-emerald-50 text-emerald-800">{row.totalQuantity}</td>
                         <td className="p-3 border text-right font-black bg-emerald-50 text-emerald-800 whitespace-nowrap">₹{row.totalValue.toLocaleString()}</td>
@@ -537,13 +522,13 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-12 bg-indigo-50 border-2 border-indigo-200 p-8 rounded-2xl flex items-center justify-between gap-6 shadow-sm">
+              <div className="mt-12 bg-amber-50 border-2 border-amber-200 p-8 rounded-2xl flex items-center justify-between gap-6 shadow-sm">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg"><i className="fas fa-calculator"></i></div>
-                  <p className="text-indigo-900 font-bold">Calculations verified. Proceed to F1 Summary (3:4:3 Distribution)?</p>
+                  <div className="w-12 h-12 bg-amber-400 rounded-full flex items-center justify-center text-white shadow-lg"><i className="fas fa-question"></i></div>
+                  <p className="text-amber-900 font-bold">Kya main agle step (F1) par proceed karun?</p>
                 </div>
                 <div className="flex gap-4">
-                  <button onClick={() => setStep(ReportStep.PC_ENTRY)} className="px-6 py-2 bg-white text-slate-700 font-bold rounded-lg border hover:bg-slate-50 transition shadow-sm uppercase text-xs">NO, EDIT</button>
+                  <button onClick={() => setStep(ReportStep.PC_ENTRY)} className="px-6 py-2 bg-white text-slate-700 font-bold rounded-lg border hover:bg-amber-100 transition shadow-sm uppercase text-xs">NO, EDIT</button>
                   <button onClick={() => setStep(ReportStep.F1_PREVIEW)} className="px-8 py-2 bg-slate-900 text-white font-black rounded-lg shadow-lg hover:bg-slate-800 transition uppercase text-xs">YES, PROCEED</button>
                 </div>
               </div>
@@ -555,9 +540,9 @@ export default function App() {
               <div className="mb-10 text-left flex justify-between items-end">
                 <div>
                   <h2 className="text-3xl font-black text-slate-800">F1: Time-Slot Summary</h2>
-                  <p className="text-slate-500">Weighted shift distribution for organizational consistency.</p>
+                  <p className="text-slate-500">Automated 3:4:3 ratio distribution across 3 shifts.</p>
                 </div>
-                <button onClick={() => exportXLSX(f1Data, `F1_Summary_${currentDate.replace(/\//g, '-')}.xlsx`, "F1")} className="bg-emerald-700 text-white px-8 py-4 rounded-xl font-black text-xs hover:bg-emerald-800 transition shadow-2xl uppercase tracking-widest shadow-emerald-100">
+                <button onClick={() => exportXLSX(f1Data, `F1_Summary_${currentDate.replace(/\//g, '-')}.xlsx`, "F1")} className="bg-emerald-700 text-white px-8 py-4 rounded-xl font-black text-xs hover:bg-emerald-800 transition shadow-2xl uppercase tracking-widest">
                   DOWNLOAD F1 XLSX
                 </button>
               </div>
@@ -571,7 +556,7 @@ export default function App() {
                       <tr key={i} className="hover:bg-slate-50 transition-colors"><td className="p-5"><span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">{row.timeSlot}</span></td><td className="p-5 text-center font-mono">{row.tc}</td><td className="p-5 text-center text-green-600 font-mono">{row.pc}</td><td className="p-5 text-center font-mono">{row.salesInBox}</td><td className="p-5 text-right text-emerald-700 font-black">₹{row.salesValue.toLocaleString()}</td></tr>
                     ))}
                     <tr className="bg-slate-900 text-white">
-                      <td className="p-6 text-right font-black uppercase text-sm">TOTAL PERFORMANCE</td>
+                      <td className="p-6 text-right font-black uppercase text-sm">TOTAL</td>
                       <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.tc, 0)}</td>
                       <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.pc, 0)}</td>
                       <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.salesInBox, 0)}</td>
@@ -580,24 +565,18 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <div className="p-12 bg-slate-900 rounded-2xl text-white shadow-2xl transition-all hover:ring-8 hover:ring-indigo-500/10">
-                <i className="fas fa-check-circle text-6xl mb-6 text-emerald-400"></i>
-                <h3 className="text-3xl font-black mb-2 uppercase tracking-widest">Reporting Cycle Complete</h3>
-                <p className="text-slate-400 mb-10 max-w-lg mx-auto font-medium">Data integrity confirmed for {currentDate}. Excel artifacts are ready for DB dispatch.</p>
-                <button onClick={handleReset} className="bg-white text-slate-900 px-12 py-4 rounded-xl font-black hover:bg-indigo-50 transition-all shadow-xl uppercase tracking-widest text-xs transform hover:-translate-y-1">Start New Cycle</button>
+              <div className="p-12 bg-indigo-900 rounded-2xl text-white shadow-2xl transition-transform hover:scale-[1.01]">
+                <i className="fas fa-check-double text-6xl mb-6 text-indigo-400 animate-bounce"></i>
+                <h3 className="text-3xl font-black mb-2 uppercase tracking-widest">Reports Finalized</h3>
+                <p className="text-indigo-200 mb-10 max-w-lg mx-auto font-medium">All field data has been processed, cross-verified with PDF records, and summarized into F1 structure.</p>
+                <button onClick={handleReset} className="bg-white text-indigo-900 px-12 py-4 rounded-xl font-black hover:bg-indigo-50 transition-all shadow-xl uppercase tracking-widest text-xs transform hover:-translate-y-1">Start New Report</button>
               </div>
             </div>
           )}
         </div>
       </main>
-      <footer className="bg-slate-900 border-t-8 border-indigo-600 p-8 text-center text-white">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-[10px] uppercase tracking-[0.2em] font-black">Sales Ops Automation Hub v4.2.0 | Senior Analyst Preferred</p>
-          <div className="flex gap-4">
-            <span className="text-[9px] bg-slate-800 px-3 py-1 rounded text-slate-400 font-mono">FRAMEWORK: VERCEL_VITE</span>
-            <span className="text-[9px] bg-indigo-900/50 px-3 py-1 rounded text-indigo-300 font-mono">DEPLOY_ENV: PRODUCTION</span>
-          </div>
-        </div>
+      <footer className="bg-slate-900 border-t-8 border-indigo-600 p-8 text-center text-white text-xs uppercase tracking-widest">
+        <p>Sales Automation Specialist | Senior Analyst Tool v4.2.0 | Vercel Optimized</p>
       </footer>
     </div>
   );
