@@ -3,12 +3,24 @@
   "name": "sales-ops-automation-hub",
   "version": "4.2.0",
   "private": true,
+  "description": "Enterprise-grade Sales Operations Tool for F1/F2 Reporting",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
   "dependencies": {
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "xlsx": "0.18.5",
     "pdfjs-dist": "4.10.38",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "lucide-react": "^0.454.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "vite": "^6.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
