@@ -1,11 +1,11 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Outlet, ReportStep, F2Row, F1Row, SKUDefinition } from './types';
 import { REPORTING_CONSTANTS, SKU_LIST, TIME_SLOTS } from './constants';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
 
-// Dynamically import PDF.js to avoid issues in some environments
+// Dynamically import PDF.js
 let pdfjsLib: any = null;
 
 export default function App() {
@@ -26,6 +26,17 @@ export default function App() {
   // KM states for F1
   const [openingKm, setOpeningKm] = useState('12450');
   const [closingKm, setClosingKm] = useState('12510');
+
+  // Handle PDF worker on mount for Vercel performance
+  useEffect(() => {
+    const loadPdfLib = async () => {
+      if (!pdfjsLib) {
+        pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
+      }
+    };
+    loadPdfLib();
+  }, []);
 
   const handleReset = () => {
     if (window.confirm("Are you sure you want to start a new report? All current data will be cleared.")) {
@@ -245,7 +256,6 @@ export default function App() {
       const { skus, id, isProductive, ...rest } = row;
       
       if (isF2) {
-        // Specific F2 Mapping to handle headers correctly
         const f2Map: Record<string, any> = {
           "Date": rest.date,
           "Name of Sales Person": rest.salesPerson,
@@ -260,19 +270,16 @@ export default function App() {
           "Contact No.": rest.contactNo,
         };
 
-        // Add SKUs
         SKU_LIST.forEach(s => {
           f2Map[s.label] = skus[s.id] || 0;
         });
 
-        // Add Totals
         f2Map["Total Order Quantity (in )"] = rest.totalQuantity;
         f2Map["Total Order Value ( in Amount)"] = rest.totalValue;
 
         return f2Map;
       }
 
-      // Default mapping for other sheets (like F1)
       if (skus) {
         const skuCols = SKU_LIST.reduce((acc, s) => ({ ...acc, [s.label]: skus[s.id] }), {});
         return { ...rest, ...skuCols };
@@ -298,7 +305,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-slate-100">
       <nav className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-xl border-b-4 border-indigo-500">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2 rounded-lg"><i className="fas fa-chart-line text-xl"></i></div>
+          <div className="bg-indigo-600 p-2 rounded-lg transition-transform hover:scale-110"><i className="fas fa-chart-line text-xl"></i></div>
           <div>
             <h1 className="text-lg font-bold tracking-tight uppercase">Sales Operations Analyst</h1>
             <p className="text-[10px] text-slate-400 font-mono">Automation Specialist | Excel Specialist</p>
@@ -365,11 +372,11 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-xl border border-dashed border-slate-300">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Outlet Name *</label>
-                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Outlet Name" />
+                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none transition" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Outlet Name" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-600 uppercase">Contact No *</label>
-                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Phone" />
+                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none transition" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Phone" />
                 </div>
                 <div className="flex items-end">
                   <button onClick={handleAddOutlet} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-lg hover:bg-slate-800 transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest text-xs">
@@ -389,7 +396,7 @@ export default function App() {
                         <td className="px-6 py-4 text-slate-400 font-mono">{i + 1}</td>
                         <td className="px-6 py-4 font-bold text-slate-800">{o.name}</td>
                         <td className="px-6 py-4 text-slate-600">{o.contactNo}</td>
-                        <td className="px-6 py-4 text-center"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600"><i className="fas fa-trash-alt"></i></button></td>
+                        <td className="px-6 py-4 text-center"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600 transition"><i className="fas fa-trash-alt"></i></button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -420,22 +427,22 @@ export default function App() {
                     {isProcessingPdf ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-pdf"></i>}
                     {isProcessingPdf ? 'READING PDF...' : 'UPLOAD SALES PDF (AUTO-FILL)'}
                   </button>
-                  <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Supports multiple pages</span>
+                  <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Supports multiple pages</span>
                 </div>
               </div>
 
               <div className="space-y-6">
                 {outlets.map((o) => (
-                  <div key={o.id} className={`border-2 rounded-xl overflow-hidden transition ${o.isProductive ? 'border-green-200 shadow-md' : 'border-slate-100 shadow-sm'}`}>
+                  <div key={o.id} className={`border-2 rounded-xl overflow-hidden transition ${o.isProductive ? 'border-green-200 shadow-md scale-[1.01]' : 'border-slate-100 shadow-sm'}`}>
                     <div className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${o.isProductive ? 'bg-green-50' : 'bg-slate-50'}`}>
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white ${o.isProductive ? 'bg-green-600' : 'bg-slate-400'}`}>{o.name.charAt(0)}</div>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white transition-colors ${o.isProductive ? 'bg-green-600 shadow-lg' : 'bg-slate-400'}`}>{o.name.charAt(0)}</div>
                         <div>
-                          <h3 className="font-black text-slate-800 uppercase text-sm">{o.name}</h3>
+                          <h3 className="font-black text-slate-800 uppercase text-sm tracking-tight">{o.name}</h3>
                           <div className="text-xs text-slate-500">Phone: {o.contactNo}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 bg-white p-2 rounded-lg border">
+                      <div className="flex items-center gap-4 bg-white p-2 rounded-lg border shadow-inner">
                         <span className="text-[10px] font-black uppercase text-slate-500">Productive?</span>
                         <button onClick={() => handleToggleProductive(o.id)} className={`w-14 h-7 rounded-full flex items-center transition-all duration-300 p-1 ${o.isProductive ? 'bg-green-600' : 'bg-slate-300'}`}>
                           <div className={`w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${o.isProductive ? 'translate-x-7' : 'translate-x-0'}`}></div>
@@ -443,11 +450,11 @@ export default function App() {
                       </div>
                     </div>
                     {o.isProductive && (
-                      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 bg-white">
+                      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 bg-white animate-in slide-in-from-top-1 duration-200">
                         {SKU_LIST.map(sku => (
                           <div key={sku.id} className="space-y-1">
                             <label className="text-[9px] font-black text-slate-400 uppercase block">{sku.label}</label>
-                            <input type="number" min="0" value={o.skus[sku.id]} onChange={e => handleUpdateSKU(o.id, sku.id, Math.max(0, parseInt(e.target.value) || 0))} className="w-full p-2 border-2 border-slate-100 rounded text-sm font-bold focus:border-indigo-500 outline-none" placeholder="0" />
+                            <input type="number" min="0" value={o.skus[sku.id]} onChange={e => handleUpdateSKU(o.id, sku.id, Math.max(0, parseInt(e.target.value) || 0))} className="w-full p-2 border-2 border-slate-100 rounded text-sm font-bold focus:border-indigo-500 outline-none transition" placeholder="0" />
                           </div>
                         ))}
                       </div>
@@ -456,8 +463,8 @@ export default function App() {
                 ))}
               </div>
               <div className="mt-10 pt-10 border-t flex justify-between items-center">
-                <button onClick={() => setStep(ReportStep.TC_ENTRY)} className="px-8 py-3 rounded-xl font-bold text-slate-600 border-2 hover:bg-slate-50 transition">BACK TO TC</button>
-                <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="px-10 py-4 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl uppercase tracking-widest text-xs transition">GENERATE F2 DETAIL</button>
+                <button onClick={() => setStep(ReportStep.TC_ENTRY)} className="px-8 py-3 rounded-xl font-bold text-slate-600 border-2 hover:bg-slate-50 transition uppercase text-xs">BACK TO TC</button>
+                <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="px-10 py-4 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl uppercase tracking-widest text-xs transition transform active:scale-95">GENERATE F2 DETAIL</button>
               </div>
             </div>
           )}
@@ -473,11 +480,11 @@ export default function App() {
                   DOWNLOAD F2 XLSX
                 </button>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
                 <table className="w-full border-collapse min-w-[2000px]">
                   <thead className="bg-slate-900 text-white text-[9px] font-black uppercase tracking-tighter">
                     <tr>
-                      <th className="p-3 border border-slate-700 bg-slate-900 sticky left-0 z-10">Date</th>
+                      <th className="p-3 border border-slate-700 bg-slate-900 sticky left-0 z-10 shadow-md">Date</th>
                       <th className="p-3 border border-slate-700">Name of Sales Person</th>
                       <th className="p-3 border border-slate-700">Desig.</th>
                       <th className="p-3 border border-slate-700">Reporting Manager Name</th>
@@ -495,8 +502,8 @@ export default function App() {
                   </thead>
                   <tbody className="text-[10px] font-bold">
                     {f2Data.map((row, i) => (
-                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                        <td className="p-3 border sticky left-0 bg-inherit">{row.date}</td>
+                      <tr key={i} className={`transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50/30`}>
+                        <td className="p-3 border sticky left-0 bg-inherit shadow-sm">{row.date}</td>
                         <td className="p-3 border">{row.salesPerson}</td>
                         <td className="p-3 border">{row.desig}</td>
                         <td className="p-3 border">{row.manager}</td>
@@ -507,22 +514,22 @@ export default function App() {
                         <td className="p-3 border text-indigo-700 uppercase">{row.name}</td>
                         <td className="p-3 border">{row.contactPerson}</td>
                         <td className="p-3 border">{row.contactNo}</td>
-                        {SKU_LIST.map(s => (<td key={s.id} className="p-3 border text-center font-bold text-slate-600">{row.skus[s.id] || '-'}</td>))}
+                        {SKU_LIST.map(s => (<td key={s.id} className={`p-3 border text-center font-bold ${row.skus[s.id] > 0 ? 'text-indigo-600 bg-indigo-50/20' : 'text-slate-400'}`}>{row.skus[s.id] || '-'}</td>))}
                         <td className="p-3 border text-center font-black bg-emerald-50 text-emerald-800">{row.totalQuantity}</td>
-                        <td className="p-3 border text-right font-black bg-emerald-50 text-emerald-800">₹{row.totalValue.toLocaleString()}</td>
+                        <td className="p-3 border text-right font-black bg-emerald-50 text-emerald-800 whitespace-nowrap">₹{row.totalValue.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="mt-12 bg-amber-50 border-2 border-amber-200 p-8 rounded-2xl flex items-center justify-between gap-6">
+              <div className="mt-12 bg-amber-50 border-2 border-amber-200 p-8 rounded-2xl flex items-center justify-between gap-6 shadow-sm">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-400 rounded-full flex items-center justify-center text-white"><i className="fas fa-question"></i></div>
+                  <div className="w-12 h-12 bg-amber-400 rounded-full flex items-center justify-center text-white shadow-lg"><i className="fas fa-question"></i></div>
                   <p className="text-amber-900 font-bold">Kya main agle step (F1) par proceed karun?</p>
                 </div>
                 <div className="flex gap-4">
-                  <button onClick={() => setStep(ReportStep.PC_ENTRY)} className="px-6 py-2 bg-white text-slate-700 font-bold rounded-lg border hover:bg-amber-100 transition">NO, EDIT</button>
-                  <button onClick={() => setStep(ReportStep.F1_PREVIEW)} className="px-8 py-2 bg-slate-900 text-white font-black rounded-lg shadow-lg hover:bg-slate-800 transition">YES, PROCEED</button>
+                  <button onClick={() => setStep(ReportStep.PC_ENTRY)} className="px-6 py-2 bg-white text-slate-700 font-bold rounded-lg border hover:bg-amber-100 transition shadow-sm uppercase text-xs">NO, EDIT</button>
+                  <button onClick={() => setStep(ReportStep.F1_PREVIEW)} className="px-8 py-2 bg-slate-900 text-white font-black rounded-lg shadow-lg hover:bg-slate-800 transition uppercase text-xs">YES, PROCEED</button>
                 </div>
               </div>
             </div>
@@ -539,31 +546,37 @@ export default function App() {
                   DOWNLOAD F1 XLSX
                 </button>
               </div>
-              <div className="overflow-x-auto rounded-2xl border-4 border-slate-100 shadow-xl mb-10 text-left">
+              <div className="overflow-x-auto rounded-2xl border-4 border-slate-100 shadow-xl mb-10 text-left bg-white">
                 <table className="w-full">
-                  <thead className="bg-slate-900 text-white text-[10px] font-black uppercase">
+                  <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
                     <tr><th className="p-5 border">TIME SLOT</th><th className="p-5 border text-center">TC</th><th className="p-5 border text-center">PC</th><th className="p-5 border text-center">SALES (BOX)</th><th className="p-5 border text-right">VALUE (₹)</th></tr>
                   </thead>
                   <tbody className="text-sm font-bold">
                     {f1Data.map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-50"><td className="p-5"><span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs">{row.timeSlot}</span></td><td className="p-5 text-center">{row.tc}</td><td className="p-5 text-center text-green-600">{row.pc}</td><td className="p-5 text-center">{row.salesInBox}</td><td className="p-5 text-right text-emerald-700 font-black">₹{row.salesValue.toLocaleString()}</td></tr>
+                      <tr key={i} className="hover:bg-slate-50 transition-colors"><td className="p-5"><span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">{row.timeSlot}</span></td><td className="p-5 text-center font-mono">{row.tc}</td><td className="p-5 text-center text-green-600 font-mono">{row.pc}</td><td className="p-5 text-center font-mono">{row.salesInBox}</td><td className="p-5 text-right text-emerald-700 font-black">₹{row.salesValue.toLocaleString()}</td></tr>
                     ))}
-                    <tr className="bg-slate-900 text-white"><td className="p-6 text-right font-black uppercase text-sm">TOTAL</td><td className="p-6 text-center text-sm">{f1Data.reduce((acc, r) => acc + r.tc, 0)}</td><td className="p-6 text-center text-sm">{f1Data.reduce((acc, r) => acc + r.pc, 0)}</td><td className="p-6 text-center text-sm">{f1Data.reduce((acc, r) => acc + r.salesInBox, 0)}</td><td className="p-6 text-right text-sm">₹{f1Data.reduce((acc, r) => acc + r.salesValue, 0).toLocaleString()}</td></tr>
+                    <tr className="bg-slate-900 text-white">
+                      <td className="p-6 text-right font-black uppercase text-sm">TOTAL</td>
+                      <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.tc, 0)}</td>
+                      <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.pc, 0)}</td>
+                      <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.salesInBox, 0)}</td>
+                      <td className="p-6 text-right text-sm font-black">₹{f1Data.reduce((acc, r) => acc + r.salesValue, 0).toLocaleString()}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
-              <div className="p-12 bg-indigo-900 rounded-2xl text-white shadow-2xl">
-                <i className="fas fa-check-double text-6xl mb-6 text-indigo-400"></i>
+              <div className="p-12 bg-indigo-900 rounded-2xl text-white shadow-2xl transition-transform hover:scale-[1.01]">
+                <i className="fas fa-check-double text-6xl mb-6 text-indigo-400 animate-bounce"></i>
                 <h3 className="text-3xl font-black mb-2 uppercase tracking-widest">Reports Finalized</h3>
-                <p className="text-indigo-200 mb-10 max-w-lg mx-auto">All field data has been processed, cross-verified with PDF records, and summarized into F1 structure.</p>
-                <button onClick={handleReset} className="bg-white text-indigo-900 px-12 py-4 rounded-xl font-black hover:bg-indigo-50 transition uppercase tracking-widest text-xs">Start New Report</button>
+                <p className="text-indigo-200 mb-10 max-w-lg mx-auto font-medium">All field data has been processed, cross-verified with PDF records, and summarized into F1 structure.</p>
+                <button onClick={handleReset} className="bg-white text-indigo-900 px-12 py-4 rounded-xl font-black hover:bg-indigo-50 transition-all shadow-xl uppercase tracking-widest text-xs transform hover:-translate-y-1">Start New Report</button>
               </div>
             </div>
           )}
         </div>
       </main>
       <footer className="bg-slate-900 border-t-8 border-indigo-600 p-8 text-center text-white text-xs uppercase tracking-widest">
-        <p>Sales Automation Specialist | Senior Analyst Tool v4.2</p>
+        <p>Sales Automation Specialist | Senior Analyst Tool v4.2.0 | Vercel Optimized</p>
       </footer>
     </div>
   );
