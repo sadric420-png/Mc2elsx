@@ -251,41 +251,70 @@ export default function App() {
     });
   }, [outlets, f2Data, currentDate, openingKm, closingKm]);
 
-  const exportXLSX = (data: any[], fileName: string, sheetName: string, isF2: boolean = false) => {
-    const flatData = data.map(row => {
-      const { skus, id, isProductive, ...rest } = row;
-      
-      if (isF2) {
-        const f2Map: Record<string, any> = {
-          "Date": rest.date,
-          "Name of Sales Person": rest.salesPerson,
-          "Desig.": rest.desig,
-          "Reporting Manager Name": rest.manager,
-          "City Name": rest.city,
-          "SS Name": rest.ss,
-          "DB Name": rest.dbName,
-          "Beat Name": rest.beatName,
-          "Name of Out Let": rest.name,
-          "Contact Person Name": rest.contactPerson,
-          "Contact No.": rest.contactNo,
-        };
-
-        SKU_LIST.forEach(s => {
-          f2Map[s.label] = skus[s.id] || 0;
-        });
-
-        f2Map["Total Order Quantity (in )"] = rest.totalQuantity;
-        f2Map["Total Order Value ( in Amount)"] = rest.totalValue;
-
-        return f2Map;
-      }
-
-      if (skus) {
-        const skuCols = SKU_LIST.reduce((acc, s) => ({ ...acc, [s.label]: skus[s.id] }), {});
-        return { ...rest, ...skuCols };
-      }
-      return rest;
+  // Utility to map F2 rows specifically for the requested Excel format
+  const mapF2ForExcel = (rows: F2Row[]) => rows.map(rest => {
+    const f2Map: Record<string, any> = {
+      "Date": rest.date,
+      "Name of Sales Person": rest.salesPerson,
+      "Desig.": rest.desig,
+      "Reporting Manager Name": rest.manager,
+      "City Name": rest.city,
+      "SS Name": rest.ss,
+      "DB Name": rest.dbName,
+      "Beat Name": rest.beatName,
+      "Name of Out Let": rest.name,
+      "Contact Person Name": rest.contactPerson,
+      "Contact No.": rest.contactNo,
+    };
+    SKU_LIST.forEach(s => {
+      f2Map[s.label] = rest.skus[s.id] || 0;
     });
+    f2Map["Total Order Quantity (in )"] = rest.totalQuantity;
+    f2Map["Total Order Value ( in Amount)"] = rest.totalValue;
+    return f2Map;
+  });
+
+  const exportMasterReport = () => {
+    const wb = XLSX.utils.book_new();
+
+    // 1. Process F1 Sheet
+    const f1SheetData = f1Data.map(r => ({
+      "TIME SLOT": r.timeSlot,
+      "TC": r.tc,
+      "PC": r.pc,
+      "SALES (BOX)": r.salesInBox,
+      "VALUE (INR)": r.salesValue,
+      "DB Confirmation": r.dbConfirmation,
+      "Opening KM": r.openingKm,
+      "Closing KM": r.closingKm
+    }));
+    const wsF1 = XLSX.utils.json_to_sheet(f1SheetData);
+    XLSX.utils.book_append_sheet(wb, wsF1, "F1 Summary");
+
+    // 2. Process F2 Sheet
+    const f2SheetData = mapF2ForExcel(f2Data);
+    const wsF2 = XLSX.utils.json_to_sheet(f2SheetData);
+    XLSX.utils.book_append_sheet(wb, wsF2, "F2 Daily Sales");
+
+    // 3. Final Write
+    const fileName = `Master_Report_${currentDate.replace(/\//g, '-')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  const exportXLSX = (data: any[], fileName: string, sheetName: string, isF2: boolean = false) => {
+    let flatData;
+    if (isF2) {
+      flatData = mapF2ForExcel(data as F2Row[]);
+    } else {
+      flatData = data.map(row => {
+        const { skus, id, isProductive, ...rest } = row;
+        if (skus) {
+          const skuCols = SKU_LIST.reduce((acc, s) => ({ ...acc, [s.label]: skus[s.id] }), {});
+          return { ...rest, ...skuCols };
+        }
+        return rest;
+      });
+    }
 
     const ws = XLSX.utils.json_to_sheet(flatData);
     const wb = XLSX.utils.book_new();
@@ -369,17 +398,17 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-xl border border-dashed border-slate-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-900 p-6 rounded-xl border-4 border-indigo-500 shadow-inner">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 uppercase">Outlet Name *</label>
-                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none transition" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Outlet Name" />
+                  <label className="text-xs font-bold text-indigo-300 uppercase">Outlet Name *</label>
+                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-lg focus:border-indigo-400 outline-none transition placeholder-slate-500 font-bold" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Type Outlet Name..." />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 uppercase">Contact No *</label>
-                  <input className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-indigo-500 outline-none transition" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Phone" />
+                  <label className="text-xs font-bold text-indigo-300 uppercase">Contact No *</label>
+                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-lg focus:border-indigo-400 outline-none transition placeholder-slate-500 font-bold" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Type Phone No..." />
                 </div>
                 <div className="flex items-end">
-                  <button onClick={handleAddOutlet} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-lg hover:bg-slate-800 transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest text-xs">
+                  <button onClick={handleAddOutlet} className="w-full bg-indigo-600 text-white font-black py-3.5 rounded-lg hover:bg-indigo-500 transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest text-xs border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1">
                     <i className="fas fa-plus"></i> Add Entry
                   </button>
                 </div>
@@ -450,11 +479,11 @@ export default function App() {
                       </div>
                     </div>
                     {o.isProductive && (
-                      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 bg-white animate-in slide-in-from-top-1 duration-200">
+                      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 bg-slate-900 animate-in slide-in-from-top-1 duration-200">
                         {SKU_LIST.map(sku => (
                           <div key={sku.id} className="space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase block">{sku.label}</label>
-                            <input type="number" min="0" value={o.skus[sku.id]} onChange={e => handleUpdateSKU(o.id, sku.id, Math.max(0, parseInt(e.target.value) || 0))} className="w-full p-2 border-2 border-slate-100 rounded text-sm font-bold focus:border-indigo-500 outline-none transition" placeholder="0" />
+                            <label className="text-[9px] font-black text-indigo-300 uppercase block">{sku.label}</label>
+                            <input type="number" min="0" value={o.skus[sku.id]} onChange={e => handleUpdateSKU(o.id, sku.id, Math.max(0, parseInt(e.target.value) || 0))} className="w-full p-2 bg-slate-800 text-white border-2 border-slate-700 rounded text-sm font-bold focus:border-indigo-400 outline-none transition placeholder-slate-600" placeholder="0" />
                           </div>
                         ))}
                       </div>
@@ -537,15 +566,21 @@ export default function App() {
 
           {step === ReportStep.F1_PREVIEW && (
             <div className="p-8 text-center">
-              <div className="mb-10 text-left flex justify-between items-end">
+              <div className="mb-10 text-left flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                 <div>
                   <h2 className="text-3xl font-black text-slate-800">F1: Time-Slot Summary</h2>
                   <p className="text-slate-500">Automated 3:4:3 ratio distribution across 3 shifts.</p>
                 </div>
-                <button onClick={() => exportXLSX(f1Data, `F1_Summary_${currentDate.replace(/\//g, '-')}.xlsx`, "F1")} className="bg-emerald-700 text-white px-8 py-4 rounded-xl font-black text-xs hover:bg-emerald-800 transition shadow-2xl uppercase tracking-widest">
-                  DOWNLOAD F1 XLSX
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => exportXLSX(f1Data, `F1_Summary_${currentDate.replace(/\//g, '-')}.xlsx`, "F1")} className="bg-white text-indigo-700 border-2 border-indigo-700 px-6 py-3 rounded-xl font-black text-xs hover:bg-indigo-50 transition shadow-lg uppercase tracking-widest">
+                    DOWNLOAD F1 ONLY
+                  </button>
+                  <button onClick={exportMasterReport} className="bg-slate-900 text-white px-8 py-4 rounded-xl font-black text-xs hover:bg-slate-800 transition shadow-2xl uppercase tracking-widest flex items-center gap-3 border-2 border-indigo-500">
+                    <i className="fas fa-file-export"></i> DOWNLOAD MASTER REPORT (F1 + F2)
+                  </button>
+                </div>
               </div>
+              
               <div className="overflow-x-auto rounded-2xl border-4 border-slate-100 shadow-xl mb-10 text-left bg-white">
                 <table className="w-full">
                   <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
