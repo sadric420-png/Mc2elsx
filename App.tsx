@@ -307,12 +307,8 @@ export default function App() {
     navigator.clipboard.writeText(summaryText).then(() => alert("Summary Copied!"));
   };
 
-  const exportMasterReport = () => {
-    const wb = XLSX.utils.book_new();
-    
-    // --- F1 SHEET FORMATTING ---
-    // Format: DATE | TIME | Name of SO/TSI | TC | PC | SALES IN BOX | SALES VALUE | DB Confirmation... | OPENING KM | CLOSING KM
-    const f1ExportData = f1Data.map(r => ({
+  const getF1ExportRows = () => {
+    return f1Data.map(r => ({
       "DATE": r.date,
       "TIME": r.timeSlot,
       "Name of SO/TSI": r.name,
@@ -321,21 +317,19 @@ export default function App() {
       "SALES IN BOX": r.salesInBox,
       "SALES VALUE": r.salesValue,
       "DB Confirmation aboutOrder Receiveng & Dispatch Status": r.dbConfirmation,
-      "OPENING KM": "", // Explicitly blank
-      "CLOSING KM": ""  // Explicitly blank
+      "OPENING KM": "", 
+      "CLOSING KM": ""
     }));
-    const f1Sheet = XLSX.utils.json_to_sheet(f1ExportData);
-    XLSX.utils.book_append_sheet(wb, f1Sheet, "F1 Summary");
-    
-    // --- F2 SHEET FORMATTING ---
-    const f2ExportData = f2Data.map((r, index) => {
+  };
+
+  const getF2ExportRows = () => {
+    return f2Data.map((r, index) => {
       // Aggregate 2L variants
       const val2L = (r.skus['sku_2l_mix'] || 0) + 
                     (r.skus['sku_2l_lichi'] || 0) + 
                     (r.skus['sku_2l_guava'] || 0) + 
                     (r.skus['sku_2l_mango'] || 0);
 
-      // Only show metadata in the first row
       const isFirst = index === 0;
 
       return {
@@ -350,7 +344,6 @@ export default function App() {
         "Name of Out Let": r.name,
         "Contact Person Name": r.contactPerson,
         "Contact No.": r.contactNo,
-        // SKU COLUMNS - STRICT ORDER
         "160 ML Juice": r.skus['sku_160ml'] || 0,
         "APPLE SPARKEL 200 ML": r.skus['sku_apple_sparkel'] || 0,
         "Nimbu Soda 200 ml": r.skus['sku_nimbu_soda'] || 0,
@@ -358,17 +351,25 @@ export default function App() {
         "Mr. Fresh Zeera": r.skus['sku_200ml_jeera'] || 0,
         "JUICE 300/500/600 ML": r.skus['sku_juice_misc'] || 0,
         "1 Ltr": r.skus['sku_1ltr'] || 0,
-        "2 Ltr": val2L, // Aggregated Value
+        "2 Ltr": val2L,
         "Coconut Water": r.skus['sku_coconut'] || 0,
         "MC2": r.skus['sku_mc2'] || 0,
         "D1 CAN ENERGY DRINK/ BASIL SEEDS": r.skus['sku_d1_energy'] || 0,
-        // TOTALS
         "Total Order Quantity (in )": r.totalQuantity,
         "Total Order Value ( in Amount)": r.totalValue
       };
     });
+  };
 
-    const f2Sheet = XLSX.utils.json_to_sheet(f2ExportData);
+  const exportMasterReport = () => {
+    const wb = XLSX.utils.book_new();
+    
+    // F1 Sheet
+    const f1Sheet = XLSX.utils.json_to_sheet(getF1ExportRows());
+    XLSX.utils.book_append_sheet(wb, f1Sheet, "F1 Summary");
+    
+    // F2 Sheet
+    const f2Sheet = XLSX.utils.json_to_sheet(getF2ExportRows());
     XLSX.utils.book_append_sheet(wb, f2Sheet, "F2 Daily Sales");
     
     XLSX.writeFile(wb, `Final_Sales_Report_${currentDate.replace(/\//g, '-')}.xlsx`);
@@ -642,10 +643,12 @@ export default function App() {
                 <i className="fas fa-check-double text-6xl text-indigo-400 mb-6 animate-pulse"></i>
                 <h3 className="text-2xl font-black uppercase mb-2 tracking-widest">Reports Finalized</h3>
                 <p className="text-indigo-200 font-bold mb-10 opacity-90 italic">Data accurately extracted and distributed.</p>
-                <div className="flex flex-col md:flex-row gap-4 justify-center">
-                  <button onClick={copyWhatsAppSummary} className="bg-green-600 text-white px-10 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0"><i className="fab fa-whatsapp mr-2 text-lg"></i> WHATSAPP SUMMARY</button>
-                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-12 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all"><i className="fas fa-file-excel mr-2 text-lg"></i> MASTER EXCEL</button>
-                  <button onClick={handleReset} className="px-10 py-5 rounded-2xl font-black uppercase text-xs tracking-widest border-2 border-indigo-500 hover:bg-indigo-800 transition-colors">NEW REPORT</button>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 px-4">
+                  <button onClick={copyWhatsAppSummary} className="bg-green-600 text-white px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0 text-[10px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP SUMMARY</button>
+                  
+                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[10px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> MASTER EXCEL</button>
+
+                  <button onClick={handleReset} className="px-6 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-indigo-500 hover:bg-indigo-800 transition-colors flex items-center justify-center gap-2">NEW REPORT</button>
                 </div>
               </div>
             </div>
