@@ -281,22 +281,25 @@ export default function App() {
     XLSX.utils.book_append_sheet(wb, f1Sheet, "F1 Summary");
     
     // --- F2 SHEET FORMATTING ---
-    const f2ExportData = f2Data.map(r => {
+    const f2ExportData = f2Data.map((r, index) => {
       // Aggregate 2L variants
       const val2L = (r.skus['sku_2l_mix'] || 0) + 
                     (r.skus['sku_2l_lichi'] || 0) + 
                     (r.skus['sku_2l_guava'] || 0) + 
                     (r.skus['sku_2l_mango'] || 0);
 
+      // Only show metadata in the first row
+      const isFirst = index === 0;
+
       return {
-        "Date": r.date,
-        "Name of Sales Person": r.salesPerson,
-        "Desig.": r.desig,
-        "Reporting Manager Name": r.manager,
-        "City Name": r.city,
-        "SS Name": r.ss,
-        "DB Name": r.dbName,
-        "Beat Name": r.beatName,
+        "Date": isFirst ? r.date : "",
+        "Name of Sales Person": isFirst ? r.salesPerson : "",
+        "Desig.": isFirst ? r.desig : "",
+        "Reporting Manager Name": isFirst ? r.manager : "",
+        "City Name": isFirst ? r.city : "",
+        "SS Name": isFirst ? r.ss : "",
+        "DB Name": isFirst ? r.dbName : "",
+        "Beat Name": isFirst ? r.beatName : "",
         "Name of Out Let": r.name,
         "Contact Person Name": r.contactPerson,
         "Contact No.": r.contactNo,
