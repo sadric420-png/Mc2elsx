@@ -1,489 +1,466 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Outlet, ReportStep, F2Row, F1Row, SKUDefinition } from './types';
 import { REPORTING_CONSTANTS, SKU_LIST, TIME_SLOTS } from './constants';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
+import * as pdfjsLib from 'pdfjs-dist';
 
-// Dynamically import PDF.js
-let pdfjsLib: any = null;
+// Configure PDF.js Worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
 
 export default function App() {
   const [step, setStep] = useState<ReportStep>(ReportStep.TC_ENTRY);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [currentDate] = useState(new Date().toLocaleDateString('en-GB'));
-  const [isProcessingPdf, setIsProcessingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  
+  // Text Processing State
+  const [pastedText, setPastedText] = useState('');
   
   // Input states for TC Entry
   const [newOutletName, setNewOutletName] = useState('');
   const [newOutletContact, setNewOutletContact] = useState('');
-  const [newOutletDB, setNewOutletDB] = useState('');
-  const [newOutletBeat, setNewOutletBeat] = useState('');
-  const [newOutletContactPerson, setNewOutletContactPerson] = useState('');
 
-  // KM states for F1
+  // KM states for F1 (Kept in state but not used in calculation as per request)
   const [openingKm, setOpeningKm] = useState('12450');
   const [closingKm, setClosingKm] = useState('12510');
 
-  // Handle PDF worker on mount for Vercel performance
-  useEffect(() => {
-    const loadPdfLib = async () => {
-      if (!pdfjsLib) {
-        pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
-      }
-    };
-    loadPdfLib();
-  }, []);
-
   const handleReset = () => {
-    if (window.confirm("Are you sure you want to start a new report? All current data will be cleared.")) {
+    if (window.confirm("Pura data clear ho jayega. Kya aap naya report start karna chahte hain?")) {
       setStep(ReportStep.TC_ENTRY);
       setOutlets([]);
       setNewOutletName('');
       setNewOutletContact('');
-      setNewOutletDB('');
-      setNewOutletBeat('');
-      setNewOutletContactPerson('');
+      setPastedText('');
     }
   };
 
   const handleAddOutlet = () => {
     if (!newOutletName || !newOutletContact) {
-      alert("Please provide 'Name of Outlet' and 'Contact No' for TC (Total Calls).");
+      alert("Outlet Name aur Contact No mandatory hai!");
       return;
     }
     const newOutlet: Outlet = {
       id: uuidv4(),
-      name: newOutletName,
-      contactNo: newOutletContact,
+      name: newOutletName.trim(),
+      contactNo: newOutletContact.trim(),
       isProductive: false,
       skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
-      dbName: newOutletDB || "N/A",
-      beatName: newOutletBeat || "Main Beat",
-      contactPerson: newOutletContactPerson || "Owner"
+      dbName: REPORTING_CONSTANTS.SS_NAME,
+      beatName: "Main Beat",
+      contactPerson: "Owner"
     };
     setOutlets([...outlets, newOutlet]);
     setNewOutletName('');
     setNewOutletContact('');
-    setNewOutletContactPerson('');
-    setNewOutletDB('');
-    setNewOutletBeat('');
   };
+
+  // Smart Math Parser: Handles "30 + 3", "30+3", "10", etc.
+  const parseQuantity = (str: string): number => {
+    try {
+      // First, normalize space around plus signs
+      const sanitized = str.replace(/\s+/g, '').replace(/[^\d+]/g, ''); 
+      // sanitized is now "30+3" or "10"
+      if (sanitized.includes('+')) {
+        return sanitized.split('+').reduce((acc, val) => acc + (parseInt(val) || 0), 0);
+      }
+      return parseInt(sanitized) || 0;
+    } catch (e) { return 0; }
+  };
+
+  // Normalizer: Removes spaces and lowercases for fuzzy matching
+  const normalize = (str: string) => str.toLowerCase().replace(/[\s\-_.]/g, '');
 
   const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsProcessingPdf(true);
     try {
-      if (!pdfjsLib) {
-        pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
-      }
-
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let fullText = "";
-
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      
+      let fullText = '';
+      // Iterate through all pages
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(" ");
-        fullText += pageText + "\n";
+        // Join items with space to preserve basic layout flow
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        fullText += `\n--- [PDF Page ${i}] ---\n` + pageText;
       }
 
+      setPastedText(prev => prev ? prev + "\n" + fullText : fullText);
+      
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+      alert(`PDF Successfully Read! ${pdf.numPages} pages extracted.\nThe text has been added to the box below. Click 'AUTO-FILL' to process.`);
+    } catch (error) {
+      console.error("PDF Reading Error:", error);
+      alert("Error reading PDF. Please ensure the file is not corrupted.");
+    }
+  };
+
+  const handleTextProcess = () => {
+    if (!pastedText.trim()) {
+      alert("Please paste text from WhatsApp or Import a PDF first.");
+      return;
+    }
+
+    try {
+      // 1. SMART SPLIT: Divide Text into "Transaction Blocks"
+      const invoiceBlocks = pastedText.split(/FY25-|Invoice|Bill No/i);
+      
       const updatedOutlets = [...outlets];
-      let matchesCount = 0;
+      let matchCount = 0;
 
       updatedOutlets.forEach(outlet => {
-        const hasMatch = fullText.toLowerCase().includes(outlet.name.toLowerCase()) || 
-                         fullText.includes(outlet.contactNo);
+        // 2. FUZZY MATCH: Find which block belongs to this outlet
+        const normName = normalize(outlet.name);
+        const normContact = normalize(outlet.contactNo);
 
-        if (hasMatch) {
+        const targetBlock = invoiceBlocks.find(block => {
+            const normBlock = normalize(block);
+            return (normContact.length > 5 && normBlock.includes(normContact)) || 
+                   (normName.length > 3 && normBlock.includes(normName));
+        });
+
+        if (targetBlock) {
           outlet.isProductive = true;
-          matchesCount++;
+          matchCount++;
+          
+          // Reset SKUs for this outlet before filling
+          SKU_LIST.forEach(s => outlet.skus[s.id] = 0);
 
+          // 3. GREEDY SKU SCAN WITH UNIT CONVERSION
           SKU_LIST.forEach(sku => {
-            const skuLabel = sku.label.split(' ')[0].toLowerCase();
-            if (fullText.toLowerCase().includes(skuLabel)) {
-              outlet.skus[sku.id] = 1; 
+            const escapedLabel = sku.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            // Regex Strategy:
+            // Group 1: Quantity (e.g. "30 + 3" or "10")
+            // Group 2: Unit (e.g. "Btl", "Box", "Pcs") - OPTIONAL
+            const pattern = new RegExp(`${escapedLabel}.*?(\\d+(?:\\s*\\+\\s*\\d+)?)\\s*(Box|Cs|Case|Btl|Bottle|Bt|Unit|Pcs|Ltr|Pc)?`, 'gi');
+            
+            const matches = [...targetBlock.matchAll(pattern)];
+            
+            if (matches.length > 0) {
+              const totalQty = matches.reduce((sum, match) => {
+                const rawQty = parseQuantity(match[1]);
+                const unit = (match[2] || '').toLowerCase();
+                
+                let finalQty = rawQty;
+                
+                // === CONVERSION LOGIC ===
+                // Check if the unit implies "Bottles" or "Pieces"
+                const isBottle = ['btl', 'bottle', 'bt', 'pc', 'pcs'].includes(unit);
+                
+                if (isBottle) {
+                  if (sku.id === 'sku_mc2') {
+                    // MC2: 30 Bottles = 1 Case
+                    finalQty = rawQty / 30;
+                  } else if (sku.id.startsWith('sku_2l')) {
+                    // 2L: 6 Bottles = 1 Case
+                    finalQty = rawQty / 6;
+                  }
+                }
+                // If unit is "Box", "Cs", or empty, we assume it's already in Cases.
+                
+                return sum + finalQty;
+              }, 0);
+
+              if (totalQty > 0) {
+                 // Store with 2 decimal precision for broken cases (e.g. 1.5)
+                 outlet.skus[sku.id] = parseFloat(totalQty.toFixed(2));
+              }
             }
           });
-          
-          if (fullText.toLowerCase().includes("mc2 yellow")) {
-            const mc2Sku = SKU_LIST.find(s => s.id === 'sku_mc2');
-            if (mc2Sku) outlet.skus[mc2Sku.id] = 1;
-          }
         }
       });
 
       setOutlets(updatedOutlets);
-      alert(`PDF Processed! Automatically updated ${matchesCount} productive calls.`);
-    } catch (error) {
-      console.error("PDF processing error:", error);
-      alert("Error reading PDF. Please ensure it's a valid sales report file.");
-    } finally {
-      setIsProcessingPdf(false);
-      if (pdfInputRef.current) pdfInputRef.current.value = '';
+      alert(`Text Analysis Complete: ${matchCount} outlets matched.\n\nUnit Conversion Applied:\n- MC2 Btl / 30 = Box\n- 2L Btl / 6 = Box`);
+    } catch (e) {
+      console.error(e);
+      alert("Error parsing text.");
     }
-  };
-
-  const downloadSampleXLSX = () => {
-    const data = [
-      ["Name of Outlet", "Contact No", "DB Name", "Beat Name", "Contact Person"],
-      ["Sample Outlet Name", "9876543210", "Sumit Enterprises", "Amritsar Main", "Rahul Sharma"],
-      ["Bisht sweet shop", "9888425863", "Sumit Enterprises", "Beas", "Owner"]
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "TC List");
-    XLSX.writeFile(wb, 'TC_Upload_Format.xlsx');
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const bstr = e.target?.result;
-        const workbook = XLSX.read(bstr, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-
-        if (!jsonData || jsonData.length < 2) {
-          alert("File is empty or missing data rows.");
-          return;
-        }
-
-        const importedOutlets: Outlet[] = jsonData
-          .slice(1)
-          .filter(row => row && row.length >= 2 && row[0] && row[1])
-          .map(row => ({
-            id: uuidv4(),
-            name: String(row[0]).trim(),
-            contactNo: String(row[1]).trim(),
-            isProductive: false,
-            skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
-            dbName: row[2] ? String(row[2]).trim() : "N/A",
-            beatName: row[3] ? String(row[3]).trim() : "Main Beat",
-            contactPerson: row[4] ? String(row[4]).trim() : "Owner"
-          }));
-
-        if (importedOutlets.length > 0) {
-          setOutlets(prev => [...prev, ...importedOutlets]);
-          alert(`Imported ${importedOutlets.length} outlets!`);
-        }
-      } catch (error) {
-        alert("Error reading file.");
-      }
+      const workbook = XLSX.read(e.target?.result, { type: 'binary' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+      const imported = data.slice(1).filter(r => r[0] && r[1]).map(r => ({
+        id: uuidv4(),
+        name: String(r[0]),
+        contactNo: String(r[1]),
+        isProductive: false,
+        skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
+        dbName: r[2] || REPORTING_CONSTANTS.SS_NAME,
+        beatName: r[3] || "Main Beat",
+        contactPerson: r[4] || "Owner"
+      }));
+      setOutlets(prev => [...prev, ...imported]);
     };
     reader.readAsBinaryString(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleToggleProductive = (id: string) => {
-    setOutlets(outlets.map(o => o.id === id ? { ...o, isProductive: !o.isProductive } : o));
-  };
-
-  const handleUpdateSKU = (outletId: string, skuId: string, value: number) => {
-    setOutlets(outlets.map(o => o.id === outletId ? { ...o, skus: { ...o.skus, [skuId]: value } } : o));
-  };
-
-  const f2Data: F2Row[] = useMemo(() => {
-    return outlets.map(o => {
-      const totalQuantity = Object.values(o.skus).reduce((a: number, b: number) => a + b, 0);
-      const totalValue = SKU_LIST.reduce((acc: number, sku: SKUDefinition) => acc + (o.skus[sku.id] * sku.price), 0);
-      return {
-        ...o,
-        date: currentDate,
-        salesPerson: REPORTING_CONSTANTS.SALES_PERSON,
-        desig: REPORTING_CONSTANTS.DESIGNATION,
-        manager: REPORTING_CONSTANTS.MANAGER,
-        city: REPORTING_CONSTANTS.CITY,
-        ss: REPORTING_CONSTANTS.SS_NAME,
-        totalQuantity,
-        totalValue
-      };
-    });
-  }, [outlets, currentDate]);
+  const f2Data: F2Row[] = useMemo(() => outlets.map(o => {
+    const totalQuantity = (Object.values(o.skus) as number[]).reduce((a: number, b: number) => a + b, 0);
+    const totalValue = SKU_LIST.reduce((acc: number, sku) => acc + (o.skus[sku.id] * sku.price), 0);
+    return {
+      ...o,
+      date: currentDate,
+      salesPerson: REPORTING_CONSTANTS.SALES_PERSON,
+      desig: REPORTING_CONSTANTS.DESIGNATION,
+      manager: REPORTING_CONSTANTS.MANAGER,
+      city: REPORTING_CONSTANTS.CITY,
+      ss: REPORTING_CONSTANTS.SS_NAME,
+      totalQuantity: parseFloat(totalQuantity.toFixed(2)),
+      totalValue: Math.round(totalValue)
+    };
+  }), [outlets, currentDate]);
 
   const f1Data: F1Row[] = useMemo(() => {
     const totalTC = outlets.length;
     const totalPC = outlets.filter(o => o.isProductive).length;
-    const totalQty = f2Data.reduce((acc, r) => acc + r.totalQuantity, 0);
-    const totalVal = f2Data.reduce((acc, r) => acc + r.totalValue, 0);
-
-    return TIME_SLOTS.map((slot, index) => {
+    const totalQty = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalQuantity, 0);
+    const totalVal = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalValue, 0);
+    return TIME_SLOTS.map((slot, i) => {
       let tc = Math.round(totalTC * slot.ratio);
       let pc = Math.round(totalPC * slot.ratio);
       let qty = Math.round(totalQty * slot.ratio);
       let val = Math.round(totalVal * slot.ratio);
-
-      if (index === 2) {
-        const currentSumTC = Math.round(totalTC * 0.3) + Math.round(totalTC * 0.4);
-        tc = totalTC - currentSumTC;
-        const currentSumPC = Math.round(totalPC * 0.3) + Math.round(totalPC * 0.4);
-        pc = totalPC - currentSumPC;
-        const currentSumQty = Math.round(totalQty * 0.3) + Math.round(totalQty * 0.4);
-        qty = totalQty - currentSumQty;
-        const currentSumVal = Math.round(totalVal * 0.3) + Math.round(totalVal * 0.4);
-        val = totalVal - currentSumVal;
+      if (i === 2) {
+        tc = totalTC - (Math.round(totalTC * 0.3) + Math.round(totalTC * 0.4));
+        pc = totalPC - (Math.round(totalPC * 0.3) + Math.round(totalPC * 0.4));
+        qty = totalQty - (Math.round(totalQty * 0.3) + Math.round(totalQty * 0.4));
+        val = totalVal - (Math.round(totalVal * 0.3) + Math.round(totalVal * 0.4));
       }
-
       return {
-        date: currentDate,
-        timeSlot: slot.label,
-        name: REPORTING_CONSTANTS.SALES_PERSON,
-        tc,
-        pc,
-        salesInBox: qty,
-        salesValue: val,
-        dbConfirmation: "Received & Dispatched",
-        openingKm: index === 0 ? openingKm : "---",
-        closingKm: index === 2 ? closingKm : "---"
+        date: currentDate, timeSlot: slot.label, name: REPORTING_CONSTANTS.SALES_PERSON,
+        tc, pc, salesInBox: qty, salesValue: val, dbConfirmation: "OK",
+        // Force empty strings as per user request to NOT fill KM
+        openingKm: "", 
+        closingKm: ""
       };
     });
-  }, [outlets, f2Data, currentDate, openingKm, closingKm]);
+  }, [outlets, f2Data, currentDate]);
 
-  // Utility to map F2 rows specifically for the requested Excel format
-  const mapF2ForExcel = (rows: F2Row[]) => rows.map(rest => {
-    const f2Map: Record<string, any> = {
-      "Date": rest.date,
-      "Name of Sales Person": rest.salesPerson,
-      "Desig.": rest.desig,
-      "Reporting Manager Name": rest.manager,
-      "City Name": rest.city,
-      "SS Name": rest.ss,
-      "DB Name": rest.dbName,
-      "Beat Name": rest.beatName,
-      "Name of Out Let": rest.name,
-      "Contact Person Name": rest.contactPerson,
-      "Contact No.": rest.contactNo,
-    };
-    SKU_LIST.forEach(s => {
-      f2Map[s.label] = rest.skus[s.id] || 0;
-    });
-    f2Map["Total Order Quantity (in )"] = rest.totalQuantity;
-    f2Map["Total Order Value ( in Amount)"] = rest.totalValue;
-    return f2Map;
-  });
+  const copyWhatsAppSummary = () => {
+    const totalTC = outlets.length;
+    const totalPC = outlets.filter(o => o.isProductive).length;
+    const totalVal = f2Data.reduce((acc: number, r) => acc + r.totalValue, 0);
+    const summaryText = `📊 *DAILY SALES REPORT*\n📅 Date: ${currentDate}\n👤 SO: ${REPORTING_CONSTANTS.SALES_PERSON}\n\n📞 *Calls:* TC: ${totalTC} | PC: ${totalPC}\n💰 *Value:* ₹${totalVal.toLocaleString()}\n📍 *Travel:* KM ${openingKm} to ${closingKm}\n\n✅ *Report Verified.*`;
+    navigator.clipboard.writeText(summaryText).then(() => alert("Summary Copied!"));
+  };
 
   const exportMasterReport = () => {
     const wb = XLSX.utils.book_new();
-
-    // 1. Process F1 Sheet
-    const f1SheetData = f1Data.map(r => ({
-      "TIME SLOT": r.timeSlot,
+    
+    // --- F1 SHEET FORMATTING ---
+    // Format: DATE | TIME | Name of SO/TSI | TC | PC | SALES IN BOX | SALES VALUE | DB Confirmation... | OPENING KM | CLOSING KM
+    const f1ExportData = f1Data.map(r => ({
+      "DATE": r.date,
+      "TIME": r.timeSlot,
+      "Name of SO/TSI": r.name,
       "TC": r.tc,
       "PC": r.pc,
-      "SALES (BOX)": r.salesInBox,
-      "VALUE (INR)": r.salesValue,
-      "DB Confirmation": r.dbConfirmation,
-      "Opening KM": r.openingKm,
-      "Closing KM": r.closingKm
+      "SALES IN BOX": r.salesInBox,
+      "SALES VALUE": r.salesValue,
+      "DB Confirmation aboutOrder Receiveng & Dispatch Status": r.dbConfirmation,
+      "OPENING KM": "", // Explicitly blank
+      "CLOSING KM": ""  // Explicitly blank
     }));
-    const wsF1 = XLSX.utils.json_to_sheet(f1SheetData);
-    XLSX.utils.book_append_sheet(wb, wsF1, "F1 Summary");
+    const f1Sheet = XLSX.utils.json_to_sheet(f1ExportData);
+    XLSX.utils.book_append_sheet(wb, f1Sheet, "F1 Summary");
+    
+    // --- F2 SHEET FORMATTING ---
+    const f2ExportData = f2Data.map(r => {
+      // Aggregate 2L variants
+      const val2L = (r.skus['sku_2l_mix'] || 0) + 
+                    (r.skus['sku_2l_lichi'] || 0) + 
+                    (r.skus['sku_2l_guava'] || 0) + 
+                    (r.skus['sku_2l_mango'] || 0);
 
-    // 2. Process F2 Sheet
-    const f2SheetData = mapF2ForExcel(f2Data);
-    const wsF2 = XLSX.utils.json_to_sheet(f2SheetData);
-    XLSX.utils.book_append_sheet(wb, wsF2, "F2 Daily Sales");
+      return {
+        "Date": r.date,
+        "Name of Sales Person": r.salesPerson,
+        "Desig.": r.desig,
+        "Reporting Manager Name": r.manager,
+        "City Name": r.city,
+        "SS Name": r.ss,
+        "DB Name": r.dbName,
+        "Beat Name": r.beatName,
+        "Name of Out Let": r.name,
+        "Contact Person Name": r.contactPerson,
+        "Contact No.": r.contactNo,
+        // SKU COLUMNS - STRICT ORDER
+        "160 ML Juice": r.skus['sku_160ml'] || 0,
+        "APPLE SPARKEL 200 ML": r.skus['sku_apple_sparkel'] || 0,
+        "Nimbu Soda 200 ml": r.skus['sku_nimbu_soda'] || 0,
+        "Nimbu Pani 300 ml": r.skus['sku_nimbu_pani'] || 0,
+        "Mr. Fresh Zeera": r.skus['sku_200ml_jeera'] || 0,
+        "JUICE 300/500/600 ML": r.skus['sku_juice_misc'] || 0,
+        "1 Ltr": r.skus['sku_1ltr'] || 0,
+        "2 Ltr": val2L, // Aggregated Value
+        "Coconut Water": r.skus['sku_coconut'] || 0,
+        "MC2": r.skus['sku_mc2'] || 0,
+        "D1 CAN ENERGY DRINK/ BASIL SEEDS": r.skus['sku_d1_energy'] || 0,
+        // TOTALS
+        "Total Order Quantity (in )": r.totalQuantity,
+        "Total Order Value ( in Amount)": r.totalValue
+      };
+    });
 
-    // 3. Final Write
-    const fileName = `Master_Report_${currentDate.replace(/\//g, '-')}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-  };
-
-  const exportXLSX = (data: any[], fileName: string, sheetName: string, isF2: boolean = false) => {
-    let flatData;
-    if (isF2) {
-      flatData = mapF2ForExcel(data as F2Row[]);
-    } else {
-      flatData = data.map(row => {
-        const { skus, id, isProductive, ...rest } = row;
-        if (skus) {
-          const skuCols = SKU_LIST.reduce((acc, s) => ({ ...acc, [s.label]: skus[s.id] }), {});
-          return { ...rest, ...skuCols };
-        }
-        return rest;
-      });
-    }
-
-    const ws = XLSX.utils.json_to_sheet(flatData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, fileName);
-  };
-
-  const handleStepClick = (targetStep: ReportStep) => {
-    if (targetStep !== ReportStep.TC_ENTRY && outlets.length === 0) {
-      alert("Pehle TC entry kijiye!");
-      return;
-    }
-    setStep(targetStep);
+    const f2Sheet = XLSX.utils.json_to_sheet(f2ExportData);
+    XLSX.utils.book_append_sheet(wb, f2Sheet, "F2 Daily Sales");
+    
+    XLSX.writeFile(wb, `Final_Sales_Report_${currentDate.replace(/\//g, '-')}.xlsx`);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
       <nav className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-xl border-b-4 border-indigo-500">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2 rounded-lg transition-transform hover:scale-110"><i className="fas fa-chart-line text-xl"></i></div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight uppercase">Sales Operations Analyst</h1>
-            <p className="text-[10px] text-slate-400 font-mono">Automation Specialist | Excel Specialist</p>
-          </div>
+          <div className="bg-indigo-600 p-2 rounded-lg"><i className="fas fa-chart-line text-xl"></i></div>
+          <h1 className="text-lg font-bold tracking-tight uppercase">Sales Ops Automation Hub</h1>
         </div>
-        <div className="hidden md:flex items-center gap-6 text-sm">
-          <div className="flex flex-col items-end">
-            <span className="text-slate-400 text-xs">SO Name</span>
-            <span className="font-bold">{REPORTING_CONSTANTS.SALES_PERSON}</span>
-          </div>
+        <div className="text-right">
+          <p className="text-[10px] text-slate-400 font-black uppercase">Analyst Mode Active</p>
+          <p className="font-bold text-sm">{REPORTING_CONSTANTS.SALES_PERSON} ({REPORTING_CONSTANTS.DESIGNATION})</p>
         </div>
       </nav>
 
       <main className="flex-grow container mx-auto p-4 lg:p-10 max-w-7xl">
-        <div className="mb-10 relative">
-          <div className="flex justify-between items-center max-w-3xl mx-auto">
-            {[
-              { id: ReportStep.TC_ENTRY, label: "TC Entry", icon: "fa-phone-volume" },
-              { id: ReportStep.PC_ENTRY, label: "PC & SKUs", icon: "fa-shopping-cart" },
-              { id: ReportStep.F2_PREVIEW, label: "F2 Detail", icon: "fa-table" },
-              { id: ReportStep.F1_PREVIEW, label: "F1 Summary", icon: "fa-file-alt" }
-            ].map((s) => (
-              <button 
-                key={s.id} 
-                onClick={() => handleStepClick(s.id)}
-                className="flex flex-col items-center relative z-10 focus:outline-none group transition"
-              >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 border-4 shadow-sm ${
-                  step === s.id ? 'bg-indigo-600 border-indigo-200 text-white scale-110' : 'bg-white border-slate-200 text-slate-400 group-hover:border-indigo-300'
-                }`}>
-                  <i className={`fas ${s.icon}`}></i>
-                </div>
-                <span className={`text-[10px] font-bold mt-2 uppercase tracking-tighter ${step === s.id ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-500'}`}>
-                  {s.label}
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 w-full max-w-2xl h-1 bg-slate-200 -z-0"></div>
+        <div className="mb-10 flex justify-between items-center max-w-3xl mx-auto">
+          {[
+            { id: ReportStep.TC_ENTRY, label: "TC ENTRY", icon: "fa-phone-volume" },
+            { id: ReportStep.PC_ENTRY, label: "PC & SKUs", icon: "fa-shopping-cart" },
+            { id: ReportStep.F2_PREVIEW, label: "F2 RESULT", icon: "fa-table" },
+            { id: ReportStep.F1_PREVIEW, label: "F1 SUMMARY", icon: "fa-file-alt" }
+          ].map((s) => (
+            <button key={s.id} onClick={() => (outlets.length > 0 || s.id === ReportStep.TC_ENTRY) && setStep(s.id)} className={`flex flex-col items-center transition ${step === s.id ? 'scale-110' : 'opacity-50 hover:opacity-100'}`}>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 shadow-sm ${step === s.id ? 'bg-indigo-600 border-indigo-200 text-white' : 'bg-white border-slate-200 text-slate-400'}`}>
+                <i className={`fas ${s.icon}`}></i>
+              </div>
+              <span className={`text-[9px] font-black mt-2 uppercase tracking-widest ${step === s.id ? 'text-indigo-600' : 'text-slate-400'}`}>{s.label}</span>
+            </button>
+          ))}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-          
+        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden min-h-[500px]">
           {step === ReportStep.TC_ENTRY && (
             <div className="p-8">
-              <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                    <i className="fas fa-file-excel text-indigo-600"></i> Phase 1: TC Data Ingestion
-                  </h2>
-                  <p className="text-slate-500 mt-1">Upload call list or enter manual calls.</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={downloadSampleXLSX} className="bg-white text-indigo-600 border-2 border-indigo-600 px-4 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-50 transition flex items-center gap-2 shadow-sm">
-                    <i className="fas fa-download"></i> SAMPLE XLSX
-                  </button>
-                  <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" ref={fileInputRef} />
-                  <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-700 transition flex items-center gap-2 shadow-lg">
-                    <i className="fas fa-upload"></i> UPLOAD TC DATA
-                  </button>
+              <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter italic">Phase 1: Total Calls List</h2>
+                <div className="flex gap-2">
+                  <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" ref={fileInputRef} />
+                  <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg uppercase tracking-widest hover:bg-emerald-700 transition"><i className="fas fa-file-excel mr-2"></i> IMPORT TC XLSX</button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-900 p-6 rounded-xl border-4 border-indigo-500 shadow-inner">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-900 p-6 rounded-2xl border-4 border-indigo-600 shadow-2xl">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-indigo-300 uppercase">Outlet Name *</label>
-                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-lg focus:border-indigo-400 outline-none transition placeholder-slate-500 font-bold" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Type Outlet Name..." />
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Name of Out Let *</label>
+                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-xl focus:border-indigo-400 outline-none transition placeholder-slate-600 font-bold" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Type Outlet Name..." />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-indigo-300 uppercase">Contact No *</label>
-                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-lg focus:border-indigo-400 outline-none transition placeholder-slate-500 font-bold" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Type Phone No..." />
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Contact No. *</label>
+                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-xl focus:border-indigo-400 outline-none transition placeholder-slate-600 font-bold" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Type Phone No..." />
                 </div>
                 <div className="flex items-end">
-                  <button onClick={handleAddOutlet} className="w-full bg-indigo-600 text-white font-black py-3.5 rounded-lg hover:bg-indigo-500 transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest text-xs border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1">
-                    <i className="fas fa-plus"></i> Add Entry
-                  </button>
+                  <button onClick={handleAddOutlet} className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl hover:bg-indigo-500 transition shadow-xl uppercase text-xs border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0"><i className="fas fa-plus mr-2"></i> ADD TO CALL LIST</button>
                 </div>
               </div>
 
-              <div className="mt-10 overflow-hidden border border-slate-200 rounded-xl">
+              <div className="mt-10 rounded-xl overflow-hidden border border-slate-200">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-100 text-[10px] font-black uppercase text-slate-500 border-b">
-                    <tr><th className="px-6 py-4">#</th><th className="px-6 py-4">Outlet Name</th><th className="px-6 py-4">Contact</th><th className="px-6 py-4 text-center">Action</th></tr>
+                  <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
+                    <tr><th className="p-4">#</th><th className="p-4">OUTLET NAME</th><th className="p-4">CONTACT</th><th className="p-4 text-right">ACTION</th></tr>
                   </thead>
-                  <tbody className="text-sm divide-y">
+                  <tbody className="divide-y text-sm font-bold">
                     {outlets.map((o, i) => (
-                      <tr key={o.id} className="hover:bg-indigo-50 transition">
-                        <td className="px-6 py-4 text-slate-400 font-mono">{i + 1}</td>
-                        <td className="px-6 py-4 font-bold text-slate-800">{o.name}</td>
-                        <td className="px-6 py-4 text-slate-600">{o.contactNo}</td>
-                        <td className="px-6 py-4 text-center"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600 transition"><i className="fas fa-trash-alt"></i></button></td>
+                      <tr key={o.id} className="hover:bg-indigo-50/50 transition">
+                        <td className="p-4 text-slate-400 font-mono">{i + 1}</td>
+                        <td className="p-4 uppercase">{o.name}</td>
+                        <td className="p-4">{o.contactNo}</td>
+                        <td className="p-4 text-right"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600"><i className="fas fa-trash-alt"></i></button></td>
                       </tr>
                     ))}
+                    {outlets.length === 0 && (
+                      <tr><td colSpan={4} className="p-20 text-center text-slate-300 uppercase font-black tracking-widest opacity-30 text-2xl italic">Empty Call List</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
               <div className="mt-10 flex justify-end">
-                <button disabled={outlets.length === 0} onClick={() => setStep(ReportStep.PC_ENTRY)} className={`px-10 py-4 rounded-xl font-black text-white shadow-xl flex items-center gap-3 transition ${outlets.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                  NEXT: PRODUCTIVE CALLS <i className="fas fa-arrow-right"></i>
-                </button>
+                <button disabled={outlets.length === 0} onClick={() => setStep(ReportStep.PC_ENTRY)} className={`px-12 py-4 rounded-2xl font-black text-white shadow-2xl flex items-center gap-3 transition ${outlets.length === 0 ? 'bg-slate-300' : 'bg-indigo-600 hover:bg-indigo-700'}`}>NEXT: FILL PC & SKUs <i className="fas fa-arrow-right"></i></button>
               </div>
             </div>
           )}
 
           {step === ReportStep.PC_ENTRY && (
             <div className="p-8">
-              <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-800">Step 2: PC & SKU Automation</h2>
-                  <p className="text-slate-500 mt-1">Mark productive calls manually or upload a PDF Sales Report for auto-fill.</p>
+              <div className="mb-8 flex justify-between items-center">
+                <h2 className="text-2xl font-black text-slate-800 uppercase italic">Phase 2: Productive Detail</h2>
+                <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">WhatsApp Text Mode</div>
+              </div>
+
+              <div className="bg-slate-900 p-6 rounded-2xl shadow-xl border-4 border-indigo-500 mb-8">
+                <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-4 gap-4">
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block">
+                    <i className="fas fa-database mr-2"></i> Source Data (WhatsApp Text or PDF)
+                  </label>
+                  <div>
+                    <input type="file" accept="application/pdf" ref={pdfInputRef} className="hidden" onChange={handlePdfUpload} />
+                    <button onClick={() => pdfInputRef.current?.click()} className="bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition shadow-lg border-b-2 border-indigo-900 active:translate-y-1 active:border-b-0">
+                      <i className="fas fa-file-pdf mr-2"></i> Import Invoice PDF
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <input type="file" accept=".pdf" onChange={handlePdfUpload} className="hidden" ref={pdfInputRef} />
-                  <button 
-                    onClick={() => pdfInputRef.current?.click()}
-                    disabled={isProcessingPdf}
-                    className={`bg-indigo-900 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-3 hover:bg-slate-800 transition shadow-lg ${isProcessingPdf ? 'opacity-50' : ''}`}
-                  >
-                    {isProcessingPdf ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-pdf"></i>}
-                    {isProcessingPdf ? 'READING PDF...' : 'UPLOAD SALES PDF (AUTO-FILL)'}
-                  </button>
-                  <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Supports multiple pages</span>
-                </div>
+                <textarea 
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  className="w-full h-40 bg-slate-800 text-green-400 font-mono text-xs p-4 rounded-xl border-2 border-slate-700 focus:border-green-500 outline-none resize-y mb-4"
+                  placeholder={`You can paste WhatsApp text here OR click 'Import Invoice PDF' to read a file.\n\nExample Data:\nInvoice FY25-101\nBisht Sweet Shop\nMC2 YELLOW 30 Btl\n2L mix 6 Btl`}
+                />
+                <button onClick={handleTextProcess} className="w-full bg-green-600 text-white font-black py-4 rounded-xl shadow-lg uppercase text-xs hover:bg-green-500 transition border-b-4 border-green-800 active:translate-y-1 active:border-b-0">
+                  <i className="fas fa-magic mr-2"></i> AUTO-FILL FROM DATA BOX
+                </button>
               </div>
 
               <div className="space-y-6">
                 {outlets.map((o) => (
-                  <div key={o.id} className={`border-2 rounded-xl overflow-hidden transition ${o.isProductive ? 'border-green-200 shadow-md scale-[1.01]' : 'border-slate-100 shadow-sm'}`}>
-                    <div className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${o.isProductive ? 'bg-green-50' : 'bg-slate-50'}`}>
+                  <div key={o.id} className={`border-2 rounded-2xl overflow-hidden transition-all duration-300 ${o.isProductive ? 'border-green-300 shadow-xl bg-white' : 'border-slate-100 bg-slate-50'}`}>
+                    <div className={`p-5 flex items-center justify-between ${o.isProductive ? 'bg-green-50/50' : ''}`}>
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white transition-colors ${o.isProductive ? 'bg-green-600 shadow-lg' : 'bg-slate-400'}`}>{o.name.charAt(0)}</div>
-                        <div>
-                          <h3 className="font-black text-slate-800 uppercase text-sm tracking-tight">{o.name}</h3>
-                          <div className="text-xs text-slate-500">Phone: {o.contactNo}</div>
-                        </div>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-sm ${o.isProductive ? 'bg-green-600' : 'bg-slate-400'}`}>{o.name[0]}</div>
+                        <div><h4 className="font-black text-slate-800 uppercase text-xs">{o.name}</h4><p className="text-[10px] text-slate-500 font-bold">{o.contactNo}</p></div>
                       </div>
-                      <div className="flex items-center gap-4 bg-white p-2 rounded-lg border shadow-inner">
-                        <span className="text-[10px] font-black uppercase text-slate-500">Productive?</span>
-                        <button onClick={() => handleToggleProductive(o.id)} className={`w-14 h-7 rounded-full flex items-center transition-all duration-300 p-1 ${o.isProductive ? 'bg-green-600' : 'bg-slate-300'}`}>
-                          <div className={`w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${o.isProductive ? 'translate-x-7' : 'translate-x-0'}`}></div>
-                        </button>
-                      </div>
+                      <button onClick={() => setOutlets(outlets.map(x => x.id === o.id ? { ...x, isProductive: !x.isProductive } : x))} className={`px-4 py-2 rounded-full font-black text-[10px] uppercase transition ${o.isProductive ? 'bg-green-600 text-white shadow-lg' : 'bg-white text-slate-400 border shadow-sm'}`}>
+                        {o.isProductive ? 'Productive ✓' : 'Non-Productive'}
+                      </button>
                     </div>
                     {o.isProductive && (
-                      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 bg-slate-900 animate-in slide-in-from-top-1 duration-200">
+                      <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 bg-slate-900 border-t-2 border-green-200">
                         {SKU_LIST.map(sku => (
                           <div key={sku.id} className="space-y-1">
-                            <label className="text-[9px] font-black text-indigo-300 uppercase block">{sku.label}</label>
-                            <input type="number" min="0" value={o.skus[sku.id]} onChange={e => handleUpdateSKU(o.id, sku.id, Math.max(0, parseInt(e.target.value) || 0))} className="w-full p-2 bg-slate-800 text-white border-2 border-slate-700 rounded text-sm font-bold focus:border-indigo-400 outline-none transition placeholder-slate-600" placeholder="0" />
+                            <label className="text-[9px] font-black text-indigo-300 uppercase tracking-tighter">{sku.label}</label>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              step="0.01"
+                              value={o.skus[sku.id]} 
+                              onChange={e => setOutlets(outlets.map(x => x.id === o.id ? { ...x, skus: { ...x.skus, [sku.id]: Math.max(0, parseFloat(e.target.value) || 0) } } : x))} 
+                              className="w-full p-2 bg-slate-800 text-white border border-slate-700 rounded-lg text-sm font-bold focus:border-green-400 outline-none transition" 
+                              placeholder="0" 
+                            />
                           </div>
                         ))}
                       </div>
@@ -491,127 +468,125 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div className="mt-10 pt-10 border-t flex justify-between items-center">
-                <button onClick={() => setStep(ReportStep.TC_ENTRY)} className="px-8 py-3 rounded-xl font-bold text-slate-600 border-2 hover:bg-slate-50 transition uppercase text-xs">BACK TO TC</button>
-                <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="px-10 py-4 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl uppercase tracking-widest text-xs transition transform active:scale-95">GENERATE F2 DETAIL</button>
+              <div className="mt-12 flex justify-between items-center border-t pt-8">
+                <button onClick={() => setStep(ReportStep.TC_ENTRY)} className="font-black text-slate-400 uppercase text-xs tracking-widest hover:text-indigo-600 transition">Back to TC</button>
+                <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-2xl uppercase text-xs hover:bg-indigo-700 transition">VIEW F2 REPORT</button>
               </div>
             </div>
           )}
 
           {step === ReportStep.F2_PREVIEW && (
             <div className="p-8">
-              <div className="mb-8 flex justify-between items-end">
+              <div className="mb-10 flex flex-col md:flex-row justify-between items-end gap-4">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-800">F2: Daily Sales Detail</h2>
-                  <p className="text-slate-500">Review total order values before final submission.</p>
+                  <h2 className="text-3xl font-black text-slate-800 uppercase italic tracking-tighter">F2 Daily Sales Report</h2>
+                  <p className="text-slate-500 font-bold mt-1">Smart-verified quantities and rate-synced values.</p>
                 </div>
-                <button onClick={() => exportXLSX(f2Data, `F2_Report_${currentDate.replace(/\//g, '-')}.xlsx`, "F2", true)} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-xs hover:bg-slate-800 transition shadow-lg uppercase tracking-widest">
-                  DOWNLOAD F2 XLSX
-                </button>
+                <button onClick={exportMasterReport} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-2xl uppercase border-b-4 border-indigo-600 hover:-translate-y-1 transition active:translate-y-0 active:border-b-0"><i className="fas fa-file-export mr-2"></i> EXPORT MASTER XLSX</button>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                <table className="w-full border-collapse min-w-[2000px]">
-                  <thead className="bg-slate-900 text-white text-[9px] font-black uppercase tracking-tighter">
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-inner bg-white">
+                <table className="w-full border-collapse min-w-[2500px]">
+                  <thead className="bg-slate-900 text-white text-[9px] font-black uppercase tracking-tighter sticky top-0 z-20">
                     <tr>
-                      <th className="p-3 border border-slate-700 bg-slate-900 sticky left-0 z-10 shadow-md">Date</th>
-                      <th className="p-3 border border-slate-700">Name of Sales Person</th>
-                      <th className="p-3 border border-slate-700">Desig.</th>
-                      <th className="p-3 border border-slate-700">Reporting Manager Name</th>
-                      <th className="p-3 border border-slate-700">City Name</th>
-                      <th className="p-3 border border-slate-700">SS Name</th>
-                      <th className="p-3 border border-slate-700">DB Name</th>
-                      <th className="p-3 border border-slate-700">Beat Name</th>
-                      <th className="p-3 border border-slate-700">Name of Out Let</th>
-                      <th className="p-3 border border-slate-700">Contact Person Name</th>
-                      <th className="p-3 border border-slate-700">Contact No.</th>
-                      {SKU_LIST.map(s => (<th key={s.id} className="p-3 border border-slate-700 text-center">{s.label}</th>))}
-                      <th className="p-3 border border-slate-700 bg-emerald-900">Total Order Quantity (in )</th>
-                      <th className="p-3 border border-slate-700 bg-emerald-900">Total Order Value ( in Amount)</th>
+                      <th className="p-4 border border-slate-700 bg-slate-900 sticky left-0 shadow-xl">Date</th>
+                      <th className="p-4 border border-slate-700">Sales Person</th>
+                      <th className="p-4 border border-slate-700">Desig.</th>
+                      <th className="p-4 border border-slate-700">Manager</th>
+                      <th className="p-4 border border-slate-700">City</th>
+                      <th className="p-4 border border-slate-700">SS Name</th>
+                      <th className="p-4 border border-slate-700">DB Name</th>
+                      <th className="p-4 border border-slate-700">Beat</th>
+                      <th className="p-4 border border-slate-700 bg-slate-900 sticky left-[60px] shadow-xl">Outlet Name</th>
+                      <th className="p-4 border border-slate-700">Contact No.</th>
+                      {SKU_LIST.map(s => <th key={s.id} className="p-4 border border-slate-700 text-center">{s.label}</th>)}
+                      <th className="p-4 border border-slate-700 bg-emerald-900">Total Qty</th>
+                      <th className="p-4 border border-slate-700 bg-emerald-900">Total Value</th>
                     </tr>
                   </thead>
-                  <tbody className="text-[10px] font-bold">
-                    {f2Data.map((row, i) => (
-                      <tr key={i} className={`transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50/30`}>
-                        <td className="p-3 border sticky left-0 bg-inherit shadow-sm">{row.date}</td>
-                        <td className="p-3 border">{row.salesPerson}</td>
-                        <td className="p-3 border">{row.desig}</td>
-                        <td className="p-3 border">{row.manager}</td>
-                        <td className="p-3 border">{row.city}</td>
-                        <td className="p-3 border">{row.ss}</td>
-                        <td className="p-3 border">{row.dbName}</td>
-                        <td className="p-3 border">{row.beatName}</td>
-                        <td className="p-3 border text-indigo-700 uppercase">{row.name}</td>
-                        <td className="p-3 border">{row.contactPerson}</td>
-                        <td className="p-3 border">{row.contactNo}</td>
-                        {SKU_LIST.map(s => (<td key={s.id} className={`p-3 border text-center font-bold ${row.skus[s.id] > 0 ? 'text-indigo-600 bg-indigo-50/20' : 'text-slate-400'}`}>{row.skus[s.id] || '-'}</td>))}
-                        <td className="p-3 border text-center font-black bg-emerald-50 text-emerald-800">{row.totalQuantity}</td>
-                        <td className="p-3 border text-right font-black bg-emerald-50 text-emerald-800 whitespace-nowrap">₹{row.totalValue.toLocaleString()}</td>
+                  <tbody className="text-[10px] font-bold divide-y">
+                    {f2Data.map((r, i) => (
+                      <tr key={i} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50/50 transition-colors`}>
+                        <td className="p-4 border bg-inherit sticky left-0 shadow-sm">{r.date}</td>
+                        <td className="p-4 border">{r.salesPerson}</td>
+                        <td className="p-4 border">{r.desig}</td>
+                        <td className="p-4 border">{r.manager}</td>
+                        <td className="p-4 border">{r.city}</td>
+                        <td className="p-4 border">{r.ss}</td>
+                        <td className="p-4 border">{r.dbName}</td>
+                        <td className="p-4 border font-black text-indigo-700 uppercase">{r.beatName}</td>
+                        <td className="p-4 border font-black uppercase bg-inherit sticky left-[60px] shadow-sm">{r.name}</td>
+                        <td className="p-4 border">{r.contactNo}</td>
+                        {SKU_LIST.map(s => <td key={s.id} className={`p-4 border text-center font-black ${r.skus[s.id] > 0 ? 'text-indigo-600 bg-indigo-50/40' : 'text-slate-300'}`}>{r.skus[s.id] || '-'}</td>)}
+                        <td className="p-4 border text-center bg-emerald-50 text-emerald-800 font-black">{r.totalQuantity}</td>
+                        <td className="p-4 border text-right bg-emerald-50 text-emerald-800 font-black whitespace-nowrap">₹{r.totalValue.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="mt-12 bg-amber-50 border-2 border-amber-200 p-8 rounded-2xl flex items-center justify-between gap-6 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-400 rounded-full flex items-center justify-center text-white shadow-lg"><i className="fas fa-question"></i></div>
-                  <p className="text-amber-900 font-bold">Kya main agle step (F1) par proceed karun?</p>
-                </div>
-                <div className="flex gap-4">
-                  <button onClick={() => setStep(ReportStep.PC_ENTRY)} className="px-6 py-2 bg-white text-slate-700 font-bold rounded-lg border hover:bg-amber-100 transition shadow-sm uppercase text-xs">NO, EDIT</button>
-                  <button onClick={() => setStep(ReportStep.F1_PREVIEW)} className="px-8 py-2 bg-slate-900 text-white font-black rounded-lg shadow-lg hover:bg-slate-800 transition uppercase text-xs">YES, PROCEED</button>
-                </div>
+              <div className="mt-12 flex justify-center">
+                <button onClick={() => setStep(ReportStep.F1_PREVIEW)} className="bg-indigo-900 text-white px-16 py-5 rounded-2xl font-black shadow-2xl uppercase tracking-widest hover:scale-105 transition-transform">FINALIZE & VIEW F1 SUMMARY</button>
               </div>
             </div>
           )}
 
           {step === ReportStep.F1_PREVIEW && (
-            <div className="p-8 text-center">
-              <div className="mb-10 text-left flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                <div>
-                  <h2 className="text-3xl font-black text-slate-800">F1: Time-Slot Summary</h2>
-                  <p className="text-slate-500">Automated 3:4:3 ratio distribution across 3 shifts.</p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button onClick={() => exportXLSX(f1Data, `F1_Summary_${currentDate.replace(/\//g, '-')}.xlsx`, "F1")} className="bg-white text-indigo-700 border-2 border-indigo-700 px-6 py-3 rounded-xl font-black text-xs hover:bg-indigo-50 transition shadow-lg uppercase tracking-widest">
-                    DOWNLOAD F1 ONLY
-                  </button>
-                  <button onClick={exportMasterReport} className="bg-slate-900 text-white px-8 py-4 rounded-xl font-black text-xs hover:bg-slate-800 transition shadow-2xl uppercase tracking-widest flex items-center gap-3 border-2 border-indigo-500">
-                    <i className="fas fa-file-export"></i> DOWNLOAD MASTER REPORT (F1 + F2)
-                  </button>
-                </div>
+            <div className="p-8">
+              <div className="mb-10 text-center">
+                <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">F1 Time-Slot Summary</h2>
+                <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-1">Automated 30%:40%:30% Ratio Logic</p>
               </div>
-              
-              <div className="overflow-x-auto rounded-2xl border-4 border-slate-100 shadow-xl mb-10 text-left bg-white">
-                <table className="w-full">
-                  <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
-                    <tr><th className="p-5 border">TIME SLOT</th><th className="p-5 border text-center">TC</th><th className="p-5 border text-center">PC</th><th className="p-5 border text-center">SALES (BOX)</th><th className="p-5 border text-right">VALUE (₹)</th></tr>
+
+              <div className="max-w-4xl mx-auto overflow-hidden rounded-3xl border-8 border-slate-50 shadow-2xl mb-12">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest">
+                    <tr><th className="p-6">DATE</th><th className="p-6">TIME</th><th className="p-6">Name of SO/TSI</th><th className="p-6 text-center">TC</th><th className="p-6 text-center">PC</th><th className="p-6 text-center">SALES IN BOX</th><th className="p-6 text-right">SALES VALUE</th><th className="p-6">DB Confirmation...</th><th className="p-6">OPENING KM</th><th className="p-6">CLOSING KM</th></tr>
                   </thead>
-                  <tbody className="text-sm font-bold">
-                    {f1Data.map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-50 transition-colors"><td className="p-5"><span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">{row.timeSlot}</span></td><td className="p-5 text-center font-mono">{row.tc}</td><td className="p-5 text-center text-green-600 font-mono">{row.pc}</td><td className="p-5 text-center font-mono">{row.salesInBox}</td><td className="p-5 text-right text-emerald-700 font-black">₹{row.salesValue.toLocaleString()}</td></tr>
+                  <tbody className="text-sm font-black divide-y">
+                    {f1Data.map((r, i) => (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-6">{r.date}</td>
+                        <td className="p-6"><span className="bg-indigo-100 text-indigo-700 px-4 py-1 rounded-full text-[10px] shadow-sm">{r.timeSlot}</span></td>
+                        <td className="p-6 text-slate-500 uppercase">{r.name}</td>
+                        <td className="p-6 text-center text-slate-400 font-mono">{r.tc}</td>
+                        <td className="p-6 text-center text-green-600 font-mono">{r.pc}</td>
+                        <td className="p-6 text-center font-mono">{r.salesInBox.toFixed(2)}</td>
+                        <td className="p-6 text-right text-emerald-700 font-black">₹{r.salesValue.toLocaleString()}</td>
+                        <td className="p-6 text-center text-slate-400 text-[10px]">{r.dbConfirmation}</td>
+                        {/* KM Columns are intentionally empty as per user request */}
+                        <td className="p-6 text-center text-slate-300 italic">{r.openingKm || "-"}</td>
+                        <td className="p-6 text-center text-slate-300 italic">{r.closingKm || "-"}</td>
+                      </tr>
                     ))}
-                    <tr className="bg-slate-900 text-white">
-                      <td className="p-6 text-right font-black uppercase text-sm">TOTAL</td>
-                      <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.tc, 0)}</td>
-                      <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.pc, 0)}</td>
-                      <td className="p-6 text-center text-sm font-mono">{f1Data.reduce((acc, r) => acc + r.salesInBox, 0)}</td>
-                      <td className="p-6 text-right text-sm font-black">₹{f1Data.reduce((acc, r) => acc + r.salesValue, 0).toLocaleString()}</td>
+                    <tr className="bg-slate-900 text-white font-black uppercase italic">
+                      <td colSpan={3} className="p-6 text-right tracking-widest">GRAND TOTAL</td>
+                      <td className="p-6 text-center">{f1Data.reduce((a: number, b: F1Row) => a + b.tc, 0)}</td>
+                      <td className="p-6 text-center text-green-400">{f1Data.reduce((a: number, b: F1Row) => a + b.pc, 0)}</td>
+                      <td className="p-6 text-center">{f1Data.reduce((a: number, b: F1Row) => a + b.salesInBox, 0).toFixed(2)}</td>
+                      <td className="p-6 text-right text-indigo-300">₹{f1Data.reduce((a: number, b: F1Row) => a + b.salesValue, 0).toLocaleString()}</td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div className="p-12 bg-indigo-900 rounded-2xl text-white shadow-2xl transition-transform hover:scale-[1.01]">
-                <i className="fas fa-check-double text-6xl mb-6 text-indigo-400 animate-bounce"></i>
-                <h3 className="text-3xl font-black mb-2 uppercase tracking-widest">Reports Finalized</h3>
-                <p className="text-indigo-200 mb-10 max-w-lg mx-auto font-medium">All field data has been processed, cross-verified with PDF records, and summarized into F1 structure.</p>
-                <button onClick={handleReset} className="bg-white text-indigo-900 px-12 py-4 rounded-xl font-black hover:bg-indigo-50 transition-all shadow-xl uppercase tracking-widest text-xs transform hover:-translate-y-1">Start New Report</button>
+              
+              <div className="text-center p-12 bg-indigo-900 rounded-3xl text-white shadow-2xl">
+                <i className="fas fa-check-double text-6xl text-indigo-400 mb-6 animate-pulse"></i>
+                <h3 className="text-2xl font-black uppercase mb-2 tracking-widest">Reports Finalized</h3>
+                <p className="text-indigo-200 font-bold mb-10 opacity-90 italic">Data accurately extracted and distributed.</p>
+                <div className="flex flex-col md:flex-row gap-4 justify-center">
+                  <button onClick={copyWhatsAppSummary} className="bg-green-600 text-white px-10 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0"><i className="fab fa-whatsapp mr-2 text-lg"></i> WHATSAPP SUMMARY</button>
+                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-12 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all"><i className="fas fa-file-excel mr-2 text-lg"></i> MASTER EXCEL</button>
+                  <button onClick={handleReset} className="px-10 py-5 rounded-2xl font-black uppercase text-xs tracking-widest border-2 border-indigo-500 hover:bg-indigo-800 transition-colors">NEW REPORT</button>
+                </div>
               </div>
             </div>
           )}
         </div>
       </main>
-      <footer className="bg-slate-900 border-t-8 border-indigo-600 p-8 text-center text-white text-xs uppercase tracking-widest">
-        <p>Sales Automation Specialist | Senior Analyst Tool v4.2.0 | Vercel Optimized</p>
+      <footer className="bg-slate-900 p-8 text-center text-slate-500 text-[10px] font-black uppercase tracking-[0.4em] border-t-8 border-indigo-600">
+        Professional Senior Sales Operations Analyst Tool v7.4 | STRICT Corporate Formatting Active
       </footer>
     </div>
   );
