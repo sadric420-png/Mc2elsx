@@ -18,6 +18,7 @@ export default function App() {
   
   // Text Processing State
   const [pastedText, setPastedText] = useState('');
+  const [bulkPasteText, setBulkPasteText] = useState('');
   
   // Input states for TC Entry
   const [newOutletName, setNewOutletName] = useState('');
@@ -34,6 +35,7 @@ export default function App() {
       setNewOutletName('');
       setNewOutletContact('');
       setPastedText('');
+      setBulkPasteText('');
     }
   };
 
@@ -55,6 +57,51 @@ export default function App() {
     setOutlets([...outlets, newOutlet]);
     setNewOutletName('');
     setNewOutletContact('');
+  };
+
+  const handleBulkPaste = () => {
+    if (!bulkPasteText.trim()) {
+        alert("Paste data first!");
+        return;
+    }
+    
+    const rows = bulkPasteText.split(/\r?\n/);
+    const newOutlets: Outlet[] = [];
+    
+    rows.forEach(row => {
+        // Excel copy usually separates columns with tabs
+        let parts = row.split('\t');
+        
+        // Fallback: If user pasted pipe separated
+        if (parts.length < 2 && row.includes('|')) {
+            parts = row.split('|');
+        }
+
+        const name = parts[0]?.trim();
+        const contact = parts[1]?.trim() || "";
+
+        // Skip potential headers or empty lines
+        if (!name || name.toLowerCase().includes('name of out let') || name.toLowerCase() === 'name') return;
+
+        newOutlets.push({
+            id: uuidv4(),
+            name: name,
+            contactNo: contact,
+            isProductive: false,
+            skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
+            dbName: REPORTING_CONSTANTS.SS_NAME,
+            beatName: "Main Beat",
+            contactPerson: "Owner"
+        });
+    });
+
+    if (newOutlets.length > 0) {
+        setOutlets(prev => [...prev, ...newOutlets]);
+        setBulkPasteText('');
+        alert(`Successfully added ${newOutlets.length} outlets from paste!`);
+    } else {
+        alert("Could not parse data. Ensure you copied 'Name' and 'Contact' columns from Excel.");
+    }
   };
 
   // Smart Math Parser: Handles "30 + 3", "30+3", "10", etc.
@@ -368,17 +415,34 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-900 p-6 rounded-2xl border-4 border-indigo-600 shadow-2xl">
+              {/* NEW: Bulk Paste Section */}
+              <div className="bg-slate-900 p-6 rounded-2xl border-4 border-indigo-600 shadow-2xl mb-8">
+                <div className="flex justify-between items-center mb-4">
+                   <h3 className="text-white font-black uppercase tracking-widest text-sm"><i className="fas fa-paste mr-2"></i> Bulk Paste from Excel</h3>
+                   <span className="text-indigo-400 text-[10px] font-bold">Format: Name [Tab] Contact</span>
+                </div>
+                <textarea
+                  value={bulkPasteText}
+                  onChange={e => setBulkPasteText(e.target.value)}
+                  className="w-full h-32 bg-slate-800 text-white font-mono text-xs p-4 rounded-xl border-2 border-slate-700 focus:border-indigo-500 outline-none resize-y mb-4 placeholder-slate-600"
+                  placeholder={`Copy columns from Excel and paste here...\n\nExample:\nOm Sai Ram Shop    9876543210\nGupta General Store    8877665544`}
+                />
+                <button onClick={handleBulkPaste} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl hover:bg-indigo-500 transition shadow-xl uppercase text-xs border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0">
+                  <i className="fas fa-upload mr-2"></i> UPLOAD PASTED DATA
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-100 p-6 rounded-2xl border-2 border-slate-200 shadow-inner">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Name of Out Let *</label>
-                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-xl focus:border-indigo-400 outline-none transition placeholder-slate-600 font-bold" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Type Outlet Name..." />
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Name of Out Let</label>
+                  <input className="w-full p-3 bg-white text-slate-900 border border-slate-300 rounded-xl focus:border-indigo-400 outline-none transition font-bold" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Type Outlet Name..." />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Contact No. *</label>
-                  <input className="w-full p-3 bg-slate-800 text-white border-2 border-slate-700 rounded-xl focus:border-indigo-400 outline-none transition placeholder-slate-600 font-bold" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Type Phone No..." />
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Contact No.</label>
+                  <input className="w-full p-3 bg-white text-slate-900 border border-slate-300 rounded-xl focus:border-indigo-400 outline-none transition font-bold" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Type Phone No..." />
                 </div>
                 <div className="flex items-end">
-                  <button onClick={handleAddOutlet} className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl hover:bg-indigo-500 transition shadow-xl uppercase text-xs border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0"><i className="fas fa-plus mr-2"></i> ADD TO CALL LIST</button>
+                  <button onClick={handleAddOutlet} className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl hover:bg-indigo-500 transition shadow-xl uppercase text-xs border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0"><i className="fas fa-plus mr-2"></i> ADD MANUALLY</button>
                 </div>
               </div>
 
@@ -589,7 +653,7 @@ export default function App() {
         </div>
       </main>
       <footer className="bg-slate-900 p-8 text-center text-slate-500 text-[10px] font-black uppercase tracking-[0.4em] border-t-8 border-indigo-600">
-        Professional Senior Sales Operations Analyst Tool v7.4 | STRICT Corporate Formatting Active
+        Professional Senior Sales Operations Analyst Tool v7.5 | STRICT Corporate Formatting Active
       </footer>
     </div>
   );
