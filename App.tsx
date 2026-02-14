@@ -28,6 +28,9 @@ export default function App() {
   const [openingKm, setOpeningKm] = useState('12450');
   const [closingKm, setClosingKm] = useState('12510');
 
+  // Normalizer: Removes spaces and lowercases for fuzzy matching. Defined early for reuse.
+  const normalize = (str: string) => str ? str.toLowerCase().replace(/[\s\-_.]/g, '') : '';
+
   const handleReset = () => {
     if (window.confirm("Pura data clear ho jayega. Kya aap naya report start karna chahte hain?")) {
       setStep(ReportStep.TC_ENTRY);
@@ -44,6 +47,22 @@ export default function App() {
       alert("Outlet Name aur Contact No mandatory hai!");
       return;
     }
+
+    // Check for duplicates before adding
+    const nName = normalize(newOutletName);
+    const nContact = normalize(newOutletContact);
+    
+    const isDuplicate = outlets.some(o => {
+      const existingName = normalize(o.name);
+      const existingContact = normalize(o.contactNo);
+      return existingName === nName || (nContact && existingContact === nContact);
+    });
+
+    if (isDuplicate) {
+      alert("Duplicate Warning: An outlet with this Name or Contact Number already exists!");
+      return;
+    }
+
     const newOutlet: Outlet = {
       id: uuidv4(),
       name: newOutletName.trim(),
@@ -96,9 +115,32 @@ export default function App() {
     });
 
     if (newOutlets.length > 0) {
-        setOutlets(prev => [...prev, ...newOutlets]);
-        setBulkPasteText('');
-        alert(`Successfully added ${newOutlets.length} outlets from paste!`);
+        // Deduplication Logic
+        const seenNames = new Set(outlets.map(o => normalize(o.name)));
+        const seenContacts = new Set(outlets.map(o => normalize(o.contactNo)));
+        
+        const uniqueNewOutlets = newOutlets.filter(o => {
+            const nName = normalize(o.name);
+            const nContact = normalize(o.contactNo);
+            
+            // Check if exists in current list OR in the newly processed batch (self-duplication)
+            if (seenNames.has(nName)) return false;
+            if (nContact && seenContacts.has(nContact)) return false;
+            
+            seenNames.add(nName);
+            if (nContact) seenContacts.add(nContact);
+            return true;
+        });
+
+        const duplicatesRemoved = newOutlets.length - uniqueNewOutlets.length;
+
+        if (uniqueNewOutlets.length > 0) {
+            setOutlets(prev => [...prev, ...uniqueNewOutlets]);
+            setBulkPasteText('');
+            alert(`Successfully added ${uniqueNewOutlets.length} outlets! \n(${duplicatesRemoved} duplicates removed automatically)`);
+        } else {
+            alert(`All ${newOutlets.length} outlets were duplicates and have been skipped.`);
+        }
     } else {
         alert("Could not parse data. Ensure you copied 'Name' and 'Contact' columns from Excel.");
     }
@@ -116,9 +158,6 @@ export default function App() {
       return parseInt(sanitized) || 0;
     } catch (e) { return 0; }
   };
-
-  // Normalizer: Removes spaces and lowercases for fuzzy matching
-  const normalize = (str: string) => str.toLowerCase().replace(/[\s\-_.]/g, '');
 
   const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -251,7 +290,28 @@ export default function App() {
         beatName: r[3] || "Main Beat",
         contactPerson: r[4] || "Owner"
       }));
-      setOutlets(prev => [...prev, ...imported]);
+
+      // Deduplication for Imported Excel
+      const seenNames = new Set(outlets.map(o => normalize(o.name)));
+      const seenContacts = new Set(outlets.map(o => normalize(o.contactNo)));
+      
+      const uniqueImported = imported.filter(o => {
+          const nName = normalize(o.name);
+          const nContact = normalize(o.contactNo);
+          
+          if (seenNames.has(nName)) return false;
+          if (nContact && seenContacts.has(nContact)) return false;
+          
+          seenNames.add(nName);
+          if (nContact) seenContacts.add(nContact);
+          return true;
+      });
+
+      if (uniqueImported.length < imported.length) {
+         alert(`Imported ${uniqueImported.length} unique outlets. Removed ${imported.length - uniqueImported.length} duplicates.`);
+      }
+
+      setOutlets(prev => [...prev, ...uniqueImported]);
     };
     reader.readAsBinaryString(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
