@@ -198,74 +198,126 @@ export default function App() {
       // 1. SMART SPLIT: Divide Text into "Transaction Blocks"
       const invoiceBlocks = pastedText.split(/FY25-|Invoice|Bill No/i);
       
-      const updatedOutlets = [...outlets];
-      let matchCount = 0;
+      // Temporary list to hold new outlets found in text
+      const newOutletsFound: Outlet[] = [];
+      // To track which existing outlets were updated
+      const processedOutletIds = new Set<string>();
 
-      updatedOutlets.forEach(outlet => {
-        // 2. FUZZY MATCH: Find which block belongs to this outlet
-        const normName = normalize(outlet.name);
-        const normContact = normalize(outlet.contactNo);
+      // Combined list logic is handled after parsing all blocks
+      // But we need to check against 'outlets' state for duplication
 
-        const targetBlock = invoiceBlocks.find(block => {
-            const normBlock = normalize(block);
-            return (normContact.length > 5 && normBlock.includes(normContact)) || 
-                   (normName.length > 3 && normBlock.includes(normName));
-        });
+      // Helper to find existing outlet
+      const findExistingOutlet = (name: string, contact: string) => {
+         const nName = normalize(name);
+         const nContact = normalize(contact);
+         return outlets.find(o => {
+             const existName = normalize(o.name);
+             const existContact = normalize(o.contactNo);
+             return (nContact.length > 5 && existContact === nContact) || 
+                    (nName.length > 3 && existName.includes(nName)); // Name includes logic
+         });
+      };
 
-        if (targetBlock) {
-          outlet.isProductive = true;
-          matchCount++;
-          
-          // Reset SKUs for this outlet before filling
-          SKU_LIST.forEach(s => outlet.skus[s.id] = 0);
+      // We will iterate through blocks and map them to outlets (existing or new)
+      const outletSkuMap: Record<string, Record<string, number>> = {};
 
-          // 3. GREEDY SKU SCAN WITH UNIT CONVERSION
-          SKU_LIST.forEach(sku => {
-            const escapedLabel = sku.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            
-            // Regex Strategy:
-            // Group 1: Quantity (e.g. "30 + 3" or "10")
-            // Group 2: Unit (e.g. "Btl", "Box", "Pcs") - OPTIONAL
-            const pattern = new RegExp(`${escapedLabel}.*?(\\d+(?:\\s*\\+\\s*\\d+)?)\\s*(Box|Cs|Case|Btl|Bottle|Bt|Unit|Pcs|Ltr|Pc)?`, 'gi');
-            
-            const matches = [...targetBlock.matchAll(pattern)];
-            
-            if (matches.length > 0) {
-              const totalQty = matches.reduce((sum, match) => {
-                const rawQty = parseQuantity(match[1]);
-                const unit = (match[2] || '').toLowerCase();
+      invoiceBlocks.forEach(block => {
+         if (block.trim().length < 10) return; // Skip noise
+
+         // Attempt to extract Name/Contact from the block itself
+         // Heuristic: The first line that isn't a known SKU or keyword
+         const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+         let extractedName = "";
+         
+         for (const line of lines) {
+             const lower = line.toLowerCase();
+             // Skip obvious non-name lines
+             if (lower.includes('invoice') || lower.includes('bill') || lower.match(/\d{2}\/\d{2}/) || SKU_LIST.some(s => lower.includes(s.label.toLowerCase()))) {
+                 continue;
+             }
+             // Assume the first valid line is the name
+             if (line.length > 3) {
+                 extractedName = line;
+                 break;
+             }
+         }
+
+         // Try to find existing outlet
+         let matchedOutlet = findExistingOutlet(extractedName, ""); // Contact extraction from block is hard, relying on name
+         
+         // If no match, create new (if we have a name)
+         if (!matchedOutlet && extractedName) {
+             // Check if we already created a pending new outlet for this name
+             const nName = normalize(extractedName);
+             matchedOutlet = newOutletsFound.find(o => normalize(o.name) === nName);
+
+             if (!matchedOutlet) {
+                 const newId = uuidv4();
+                 matchedOutlet = {
+                    id: newId,
+                    name: extractedName,
+                    contactNo: "", // Cannot reliably extract contact from unstructured invoice text usually
+                    isProductive: true,
+                    skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
+                    dbName: REPORTING_CONSTANTS.SS_NAME,
+                    beatName: "Main Beat",
+                    contactPerson: "Owner"
+                 };
+                 newOutletsFound.push(matchedOutlet);
+             }
+         }
+
+         if (matchedOutlet) {
+             matchedOutlet.isProductive = true; // Mark productive if found in invoice
+             if (!outletSkuMap[matchedOutlet.id]) {
+                 // Initialize if not present (preserve existing values if it's an existing outlet?)
+                 // Actually, if we are parsing text, we usually want to ADD to existing or OVERWRITE.
+                 // Let's assume ADDITIVE for this session.
+                 outletSkuMap[matchedOutlet.id] = { ...matchedOutlet.skus }; 
+             }
+
+             // Parse SKUs from this block
+             SKU_LIST.forEach(sku => {
+                const escapedLabel = sku.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const pattern = new RegExp(`${escapedLabel}.*?(\\d+(?:\\s*\\+\\s*\\d+)?)\\s*(Box|Cs|Case|Btl|Bottle|Bt|Unit|Pcs|Ltr|Pc)?`, 'gi');
+                const matches = [...block.matchAll(pattern)];
                 
-                let finalQty = rawQty;
-                
-                // === CONVERSION LOGIC ===
-                // Check if the unit implies "Bottles" or "Pieces"
-                const isBottle = ['btl', 'bottle', 'bt', 'pc', 'pcs'].includes(unit);
-                
-                if (isBottle) {
-                  if (sku.id === 'sku_mc2') {
-                    // MC2: 30 Bottles = 1 Case
-                    finalQty = rawQty / 30;
-                  } else if (sku.id.startsWith('sku_2l')) {
-                    // 2L: 6 Bottles = 1 Case
-                    finalQty = rawQty / 6;
-                  }
+                if (matches.length > 0) {
+                    const blockQty = matches.reduce((sum, match) => {
+                        const rawQty = parseQuantity(match[1]);
+                        const unit = (match[2] || '').toLowerCase();
+                        let finalQty = rawQty;
+                        
+                        const isBottle = ['btl', 'bottle', 'bt', 'pc', 'pcs'].includes(unit);
+                        if (isBottle) {
+                            if (sku.id === 'sku_mc2') finalQty = rawQty / 30;
+                            else if (sku.id.startsWith('sku_2l')) finalQty = rawQty / 6;
+                        }
+                        return sum + finalQty;
+                    }, 0);
+                    
+                    // Add to map
+                    outletSkuMap[matchedOutlet.id][sku.id] = (outletSkuMap[matchedOutlet.id][sku.id] || 0) + blockQty;
                 }
-                // If unit is "Box", "Cs", or empty, we assume it's already in Cases.
-                
-                return sum + finalQty;
-              }, 0);
-
-              if (totalQty > 0) {
-                 // Store with 2 decimal precision for broken cases (e.g. 1.5)
-                 outlet.skus[sku.id] = parseFloat(totalQty.toFixed(2));
-              }
-            }
-          });
-        }
+             });
+         }
       });
 
-      setOutlets(updatedOutlets);
-      alert(`Text Analysis Complete: ${matchCount} outlets matched.\n\nUnit Conversion Applied:\n- MC2 Btl / 30 = Box\n- 2L Btl / 6 = Box`);
+      // Merge results back to state
+      const finalOutlets = [...outlets, ...newOutletsFound].map(o => {
+          if (outletSkuMap[o.id]) {
+              // Apply rounded values only at the final step
+              const roundedSkus = { ...outletSkuMap[o.id] };
+              Object.keys(roundedSkus).forEach(k => {
+                  roundedSkus[k] = Math.round(roundedSkus[k]); // STRICT INTEGER ROUNDING
+              });
+              return { ...o, isProductive: true, skus: roundedSkus };
+          }
+          return o;
+      });
+
+      setOutlets(finalOutlets);
+      alert(`Text Analysis Complete.\nMatched/Updated: ${Object.keys(outletSkuMap).length} outlets.\nNew Outlets Added: ${newOutletsFound.length}\n\nNote: All quantities have been rounded to whole numbers.`);
     } catch (e) {
       console.error(e);
       alert("Error parsing text.");
@@ -318,8 +370,11 @@ export default function App() {
   };
 
   const f2Data: F2Row[] = useMemo(() => outlets.map(o => {
-    const totalQuantity = (Object.values(o.skus) as number[]).reduce((a: number, b: number) => a + b, 0);
-    const totalValue = SKU_LIST.reduce((acc: number, sku) => acc + (o.skus[sku.id] * sku.price), 0);
+    // Round each SKU value before summing to ensure integer totals
+    const totalQuantity = (Object.values(o.skus) as number[]).reduce((a: number, b: number) => a + Math.round(b), 0);
+    // Value is calculated on rounded quantities
+    const totalValue = SKU_LIST.reduce((acc: number, sku) => acc + (Math.round(o.skus[sku.id]) * sku.price), 0);
+    
     return {
       ...o,
       date: currentDate,
@@ -328,7 +383,7 @@ export default function App() {
       manager: REPORTING_CONSTANTS.MANAGER,
       city: REPORTING_CONSTANTS.CITY,
       ss: REPORTING_CONSTANTS.SS_NAME,
-      totalQuantity: parseFloat(totalQuantity.toFixed(2)),
+      totalQuantity: Math.round(totalQuantity),
       totalValue: Math.round(totalValue)
     };
   }), [outlets, currentDate]);
@@ -374,8 +429,8 @@ export default function App() {
       "Name of SO/TSI": r.name,
       "TC": r.tc,
       "PC": r.pc,
-      "SALES IN BOX": r.salesInBox,
-      "SALES VALUE": r.salesValue,
+      "SALES IN BOX": Math.round(r.salesInBox),
+      "SALES VALUE": Math.round(r.salesValue),
       "DB Confirmation aboutOrder Receiveng & Dispatch Status": r.dbConfirmation,
       "OPENING KM": "", 
       "CLOSING KM": ""
@@ -384,11 +439,11 @@ export default function App() {
 
   const getF2ExportRows = () => {
     return f2Data.map((r, index) => {
-      // Aggregate 2L variants
-      const val2L = (r.skus['sku_2l_mix'] || 0) + 
-                    (r.skus['sku_2l_lichi'] || 0) + 
-                    (r.skus['sku_2l_guava'] || 0) + 
-                    (r.skus['sku_2l_mango'] || 0);
+      // Aggregate 2L variants - ensuring strict integer addition
+      const val2L = Math.round(r.skus['sku_2l_mix'] || 0) + 
+                    Math.round(r.skus['sku_2l_lichi'] || 0) + 
+                    Math.round(r.skus['sku_2l_guava'] || 0) + 
+                    Math.round(r.skus['sku_2l_mango'] || 0);
 
       const isFirst = index === 0;
 
@@ -404,19 +459,19 @@ export default function App() {
         "Name of Out Let": r.name,
         "Contact Person Name": r.contactPerson,
         "Contact No.": r.contactNo,
-        "160 ML Juice": r.skus['sku_160ml'] || 0,
-        "APPLE SPARKEL 200 ML": r.skus['sku_apple_sparkel'] || 0,
-        "Nimbu Soda 200 ml": r.skus['sku_nimbu_soda'] || 0,
-        "Nimbu Pani 300 ml": r.skus['sku_nimbu_pani'] || 0,
-        "Mr. Fresh Zeera": r.skus['sku_200ml_jeera'] || 0,
-        "JUICE 300/500/600 ML": r.skus['sku_juice_misc'] || 0,
-        "1 Ltr": r.skus['sku_1ltr'] || 0,
+        "160 ML Juice": Math.round(r.skus['sku_160ml'] || 0),
+        "APPLE SPARKEL 200 ML": Math.round(r.skus['sku_apple_sparkel'] || 0),
+        "Nimbu Soda 200 ml": Math.round(r.skus['sku_nimbu_soda'] || 0),
+        "Nimbu Pani 300 ml": Math.round(r.skus['sku_nimbu_pani'] || 0),
+        "Mr. Fresh Zeera": Math.round(r.skus['sku_200ml_jeera'] || 0),
+        "JUICE 300/500/600 ML": Math.round(r.skus['sku_juice_misc'] || 0),
+        "1 Ltr": Math.round(r.skus['sku_1ltr'] || 0),
         "2 Ltr": val2L,
-        "Coconut Water": r.skus['sku_coconut'] || 0,
-        "MC2": r.skus['sku_mc2'] || 0,
-        "D1 CAN ENERGY DRINK/ BASIL SEEDS": r.skus['sku_d1_energy'] || 0,
-        "Total Order Quantity (in )": r.totalQuantity,
-        "Total Order Value ( in Amount)": r.totalValue
+        "Coconut Water": Math.round(r.skus['sku_coconut'] || 0),
+        "MC2": Math.round(r.skus['sku_mc2'] || 0),
+        "D1 CAN ENERGY DRINK/ BASIL SEEDS": Math.round(r.skus['sku_d1_energy'] || 0),
+        "Total Order Quantity (in )": Math.round(r.totalQuantity),
+        "Total Order Value ( in Amount)": Math.round(r.totalValue)
       };
     });
   };
@@ -583,9 +638,8 @@ export default function App() {
                             <input 
                               type="number" 
                               min="0" 
-                              step="0.01"
                               value={o.skus[sku.id]} 
-                              onChange={e => setOutlets(outlets.map(x => x.id === o.id ? { ...x, skus: { ...x.skus, [sku.id]: Math.max(0, parseFloat(e.target.value) || 0) } } : x))} 
+                              onChange={e => setOutlets(outlets.map(x => x.id === o.id ? { ...x, skus: { ...x.skus, [sku.id]: Math.max(0, Math.round(parseFloat(e.target.value) || 0)) } } : x))} 
                               className="w-full p-2 bg-slate-800 text-white border border-slate-700 rounded-lg text-sm font-bold focus:border-green-400 outline-none transition" 
                               placeholder="0" 
                             />
@@ -679,7 +733,7 @@ export default function App() {
                         <td className="p-6 text-slate-500 uppercase">{r.name}</td>
                         <td className="p-6 text-center text-slate-400 font-mono">{r.tc}</td>
                         <td className="p-6 text-center text-green-600 font-mono">{r.pc}</td>
-                        <td className="p-6 text-center font-mono">{r.salesInBox.toFixed(2)}</td>
+                        <td className="p-6 text-center font-mono">{r.salesInBox.toFixed(0)}</td>
                         <td className="p-6 text-right text-emerald-700 font-black">₹{r.salesValue.toLocaleString()}</td>
                         <td className="p-6 text-center text-slate-400 text-[10px]">{r.dbConfirmation}</td>
                         {/* KM Columns are intentionally empty as per user request */}
@@ -691,7 +745,7 @@ export default function App() {
                       <td colSpan={3} className="p-6 text-right tracking-widest">GRAND TOTAL</td>
                       <td className="p-6 text-center">{f1Data.reduce((a: number, b: F1Row) => a + b.tc, 0)}</td>
                       <td className="p-6 text-center text-green-400">{f1Data.reduce((a: number, b: F1Row) => a + b.pc, 0)}</td>
-                      <td className="p-6 text-center">{f1Data.reduce((a: number, b: F1Row) => a + b.salesInBox, 0).toFixed(2)}</td>
+                      <td className="p-6 text-center">{f1Data.reduce((a: number, b: F1Row) => a + b.salesInBox, 0).toFixed(0)}</td>
                       <td className="p-6 text-right text-indigo-300">₹{f1Data.reduce((a: number, b: F1Row) => a + b.salesValue, 0).toLocaleString()}</td>
                       <td colSpan={3}></td>
                     </tr>
