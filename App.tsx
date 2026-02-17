@@ -49,6 +49,25 @@ export default function App() {
     return totals;
   }, [outlets]);
 
+  // Live Summary (Total PC, Total Box, Total Value)
+  const liveSummary = useMemo(() => {
+    let pc = 0;
+    let box = 0;
+    let val = 0;
+    
+    outlets.forEach(o => {
+      if (o.isProductive) {
+        pc++;
+        SKU_LIST.forEach(sku => {
+            const qty = Math.round(o.skus[sku.id] || 0);
+            box += qty;
+            val += qty * sku.price;
+        });
+      }
+    });
+    return { pc, box, val };
+  }, [outlets]);
+
   const handleReset = () => {
     if (window.confirm("Pura data clear ho jayega. Kya aap naya report start karna chahte hain?")) {
       setStep(ReportStep.TC_ENTRY);
@@ -698,14 +717,36 @@ export default function App() {
               </div>
 
               {/* LIVE SKU TOTALS STICKY FOOTER */}
-              <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white p-4 shadow-2xl border-t-4 border-indigo-500 z-50">
-                <div className="container mx-auto flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-indigo-400 mr-4 hidden md:block">Live Totals:</h3>
-                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-slate-800 w-full md:w-auto">
+              <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white p-3 shadow-2xl border-t-4 border-indigo-500 z-50">
+                <div className="container mx-auto flex flex-col md:flex-row items-center gap-4 md:gap-8">
+                  
+                  {/* High Level Summary Metrics */}
+                  <div className="flex items-center gap-6 bg-slate-800 px-6 py-2 rounded-xl border border-slate-700 shadow-lg min-w-fit">
+                    <div className="text-center">
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total PC</div>
+                      <div className="text-xl font-black text-white leading-none">{liveSummary.pc}</div>
+                    </div>
+                    <div className="w-px h-8 bg-slate-600"></div>
+                    <div className="text-center">
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Box</div>
+                      <div className="text-xl font-black text-yellow-400 leading-none">{liveSummary.box}</div>
+                    </div>
+                    <div className="w-px h-8 bg-slate-600"></div>
+                    <div className="text-center">
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Value</div>
+                      <div className="text-xl font-black text-emerald-400 leading-none">₹{liveSummary.val.toLocaleString()}</div>
+                    </div>
+                  </div>
+
+                  {/* Divider for mobile/desktop */}
+                  <div className="hidden md:block w-px h-10 bg-slate-700"></div>
+
+                  {/* Individual SKU Totals */}
+                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-slate-800 w-full">
                     {SKU_LIST.map(sku => (
-                      <div key={sku.id} className="flex flex-col items-center min-w-[80px] bg-slate-800 p-2 rounded-lg border border-slate-700">
-                        <span className="text-[9px] text-slate-400 font-bold uppercase whitespace-nowrap">{sku.label}</span>
-                        <span className="text-lg font-black text-green-400">{liveSkuTotals[sku.id]}</span>
+                      <div key={sku.id} className="flex flex-col items-center min-w-[70px] bg-slate-800 p-2 rounded-lg border border-slate-700 shrink-0">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase whitespace-nowrap max-w-[65px] overflow-hidden text-ellipsis">{sku.label}</span>
+                        <span className="text-base font-black text-indigo-300">{liveSkuTotals[sku.id]}</span>
                       </div>
                     ))}
                   </div>
