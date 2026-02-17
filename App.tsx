@@ -31,32 +31,22 @@ export default function App() {
   // Normalizer: Removes spaces and lowercases for fuzzy matching. Defined early for reuse.
   const normalize = (str: string) => str ? str.toLowerCase().replace(/[\s\-_.]/g, '') : '';
 
-  // Live Statistics for PC Entry (Dashboard Logic)
-  const liveStats = useMemo(() => {
+  // Live SKU Totals for PC Entry
+  const liveSkuTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     SKU_LIST.forEach(sku => totals[sku.id] = 0);
-    
-    let totalQty = 0;
-    let totalVal = 0;
-    let pcCount = 0;
-
     outlets.forEach(o => {
       if (o.isProductive) {
-         pcCount++;
          Object.entries(o.skus).forEach(([key, val]) => {
-             const quantity = val as number; // explicit cast
-             const q = Math.round(quantity);
+             // Explicit cast to number to fix potential 'unknown' type inference error
+             const quantity = val as number;
              if (totals[key] !== undefined) {
-                 totals[key] += q;
-                 totalQty += q;
-                 
-                 const price = SKU_LIST.find(s => s.id === key)?.price || 0;
-                 totalVal += q * price;
+                 totals[key] += Math.round(quantity);
              }
          });
       }
     });
-    return { totals, totalQty, totalVal, pcCount };
+    return totals;
   }, [outlets]);
 
   const handleReset = () => {
@@ -421,21 +411,42 @@ export default function App() {
     const totalPC = outlets.filter(o => o.isProductive).length;
     const totalQty = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalQuantity, 0);
     const totalVal = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalValue, 0);
+    
+    // Calculate Average Price per Box (Handling division by zero)
+    const avgPricePerBox = totalQty > 0 ? totalVal / totalQty : 0;
+
+    let remainingTC = totalTC;
+    let remainingPC = totalPC;
+    let remainingQty = totalQty;
+    let remainingVal = totalVal;
+
     return TIME_SLOTS.map((slot, i) => {
-      let tc = Math.round(totalTC * slot.ratio);
-      let pc = Math.round(totalPC * slot.ratio);
-      let qty = Math.round(totalQty * slot.ratio);
-      let val = Math.round(totalVal * slot.ratio);
-      if (i === 2) {
-        tc = totalTC - (Math.round(totalTC * 0.3) + Math.round(totalTC * 0.4));
-        pc = totalPC - (Math.round(totalPC * 0.3) + Math.round(totalPC * 0.4));
-        qty = totalQty - (Math.round(totalQty * 0.3) + Math.round(totalQty * 0.4));
-        val = totalVal - (Math.round(totalVal * 0.3) + Math.round(totalVal * 0.4));
-      }
+      const isLast = i === TIME_SLOTS.length - 1;
+
+      // Calculate Counts using subtraction method to ensure exact integer matches for sum
+      let tc = isLast ? remainingTC : Math.round(totalTC * slot.ratio);
+      let pc = isLast ? remainingPC : Math.round(totalPC * slot.ratio);
+      let qty = isLast ? remainingQty : Math.round(totalQty * slot.ratio);
+      
+      // Calculate Value based on Quantity in this slot * Avg Price to ensure "Box-Value Sync"
+      // If last slot, we prioritize Grand Total match
+      let val = isLast ? remainingVal : Math.round(qty * avgPricePerBox);
+      
+      // Update remainders
+      remainingTC -= tc;
+      remainingPC -= pc;
+      remainingQty -= qty;
+      remainingVal -= val;
+
       return {
-        date: currentDate, timeSlot: slot.label, name: REPORTING_CONSTANTS.SALES_PERSON,
-        tc, pc, salesInBox: qty, salesValue: val, dbConfirmation: "OK",
-        // Force empty strings as per user request to NOT fill KM
+        date: currentDate, 
+        timeSlot: slot.label, 
+        name: REPORTING_CONSTANTS.SALES_PERSON,
+        tc, 
+        pc, 
+        salesInBox: qty, 
+        salesValue: val, 
+        dbConfirmation: "OK",
         openingKm: "", 
         closingKm: ""
       };
@@ -510,21 +521,15 @@ export default function App() {
   const exportMasterReport = () => {
     const wb = XLSX.utils.book_new();
     
-    // Preparation of Data
-    const finalF1 = getF1ExportRows();
-    const finalF2 = getF2ExportRows();
-
     // F1 Sheet
-    const f1Sheet = XLSX.utils.json_to_sheet(finalF1);
+    const f1Sheet = XLSX.utils.json_to_sheet(getF1ExportRows());
     XLSX.utils.book_append_sheet(wb, f1Sheet, "F1 Summary");
     
     // F2 Sheet
-    const f2Sheet = XLSX.utils.json_to_sheet(finalF2);
+    const f2Sheet = XLSX.utils.json_to_sheet(getF2ExportRows());
     XLSX.utils.book_append_sheet(wb, f2Sheet, "F2 Daily Sales");
     
-    const fName = `Final_Sales_Report_${currentDate.replace(/\//g, '-')}.xlsx`;
-    
-    XLSX.writeFile(wb, fName);
+    XLSX.writeFile(wb, `Final_Sales_Report_${currentDate.replace(/\//g, '-')}.xlsx`);
   };
 
   return (
@@ -626,7 +631,7 @@ export default function App() {
           )}
 
           {step === ReportStep.PC_ENTRY && (
-            <div className="p-8 pb-48">
+            <div className="p-8 pb-32">
               <div className="mb-8 flex justify-between items-center">
                 <h2 className="text-2xl font-black text-slate-800 uppercase italic">Phase 2: Productive Detail</h2>
                 <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">WhatsApp Text Mode</div>
@@ -693,35 +698,14 @@ export default function App() {
               </div>
 
               {/* LIVE SKU TOTALS STICKY FOOTER */}
-              <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white shadow-2xl border-t-4 border-indigo-500 z-50">
-                {/* Summary Header */}
-                <div className="bg-indigo-900 px-4 py-2 flex justify-between items-center border-b border-indigo-700">
-                    <div className="flex gap-4 md:gap-8">
-                        <div className="flex flex-col md:flex-row md:items-center md:gap-2">
-                           <span className="text-[9px] text-indigo-300 font-black uppercase tracking-widest">Productive Calls</span>
-                           <span className="text-lg font-black text-white leading-none">{liveStats.pcCount}</span>
-                        </div>
-                        <div className="flex flex-col md:flex-row md:items-center md:gap-2">
-                           <span className="text-[9px] text-indigo-300 font-black uppercase tracking-widest">Total Qty</span>
-                           <span className="text-lg font-black text-yellow-400 leading-none">{liveStats.totalQty}</span>
-                        </div>
-                        <div className="flex flex-col md:flex-row md:items-center md:gap-2">
-                           <span className="text-[9px] text-indigo-300 font-black uppercase tracking-widest">Total Value</span>
-                           <span className="text-lg font-black text-emerald-400 leading-none">₹{liveStats.totalVal.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest hidden md:block">
-                        Live Dashboard
-                    </div>
-                </div>
-
-                {/* SKU Scroll List */}
-                <div className="p-3 bg-slate-900">
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-slate-800">
+              <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white p-4 shadow-2xl border-t-4 border-indigo-500 z-50">
+                <div className="container mx-auto flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-indigo-400 mr-4 hidden md:block">Live Totals:</h3>
+                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-slate-800 w-full md:w-auto">
                     {SKU_LIST.map(sku => (
-                      <div key={sku.id} className={`flex flex-col items-center min-w-[70px] p-2 rounded-lg border transition-all ${liveStats.totals[sku.id] > 0 ? 'bg-indigo-900/50 border-indigo-500 shadow-lg scale-100' : 'bg-slate-800 border-slate-700 opacity-50 scale-95'}`}>
-                        <span className="text-[8px] text-slate-400 font-bold uppercase whitespace-nowrap truncate w-full text-center">{sku.label}</span>
-                        <span className={`text-sm font-black mt-1 ${liveStats.totals[sku.id] > 0 ? 'text-white' : 'text-slate-600'}`}>{liveStats.totals[sku.id]}</span>
+                      <div key={sku.id} className="flex flex-col items-center min-w-[80px] bg-slate-800 p-2 rounded-lg border border-slate-700">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase whitespace-nowrap">{sku.label}</span>
+                        <span className="text-lg font-black text-green-400">{liveSkuTotals[sku.id]}</span>
                       </div>
                     ))}
                   </div>
@@ -831,11 +815,10 @@ export default function App() {
                 <i className="fas fa-check-double text-6xl text-indigo-400 mb-6 animate-pulse"></i>
                 <h3 className="text-2xl font-black uppercase mb-2 tracking-widest">Reports Finalized</h3>
                 <p className="text-indigo-200 font-bold mb-10 opacity-90 italic">Data accurately extracted and distributed.</p>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 px-4">
                   <button onClick={copyWhatsAppSummary} className="bg-green-600 text-white px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0 text-[10px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP SUMMARY</button>
                   
-                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[10px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> EXPORT MASTER XLSX</button>
+                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[10px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> MASTER EXCEL</button>
 
                   <button onClick={handleReset} className="px-6 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-indigo-500 hover:bg-indigo-800 transition-colors flex items-center justify-center gap-2">NEW REPORT</button>
                 </div>
