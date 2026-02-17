@@ -31,6 +31,34 @@ export default function App() {
   // Normalizer: Removes spaces and lowercases for fuzzy matching. Defined early for reuse.
   const normalize = (str: string) => str ? str.toLowerCase().replace(/[\s\-_.]/g, '') : '';
 
+  // Live Statistics for PC Entry (Dashboard Logic)
+  const liveStats = useMemo(() => {
+    const totals: Record<string, number> = {};
+    SKU_LIST.forEach(sku => totals[sku.id] = 0);
+    
+    let totalQty = 0;
+    let totalVal = 0;
+    let pcCount = 0;
+
+    outlets.forEach(o => {
+      if (o.isProductive) {
+         pcCount++;
+         Object.entries(o.skus).forEach(([key, val]) => {
+             const quantity = val as number; // explicit cast
+             const q = Math.round(quantity);
+             if (totals[key] !== undefined) {
+                 totals[key] += q;
+                 totalQty += q;
+                 
+                 const price = SKU_LIST.find(s => s.id === key)?.price || 0;
+                 totalVal += q * price;
+             }
+         });
+      }
+    });
+    return { totals, totalQty, totalVal, pcCount };
+  }, [outlets]);
+
   const handleReset = () => {
     if (window.confirm("Pura data clear ho jayega. Kya aap naya report start karna chahte hain?")) {
       setStep(ReportStep.TC_ENTRY);
@@ -439,6 +467,9 @@ export default function App() {
 
   const getF2ExportRows = () => {
     return f2Data.map((r, index) => {
+      // Helper to format 0 as empty string
+      const fmt = (val: number) => val === 0 ? "" : val;
+
       // Aggregate 2L variants - ensuring strict integer addition
       const val2L = Math.round(r.skus['sku_2l_mix'] || 0) + 
                     Math.round(r.skus['sku_2l_lichi'] || 0) + 
@@ -459,19 +490,19 @@ export default function App() {
         "Name of Out Let": r.name,
         "Contact Person Name": r.contactPerson,
         "Contact No.": r.contactNo,
-        "160 ML Juice": Math.round(r.skus['sku_160ml'] || 0),
-        "APPLE SPARKEL 200 ML": Math.round(r.skus['sku_apple_sparkel'] || 0),
-        "Nimbu Soda 200 ml": Math.round(r.skus['sku_nimbu_soda'] || 0),
-        "Nimbu Pani 300 ml": Math.round(r.skus['sku_nimbu_pani'] || 0),
-        "Mr. Fresh Zeera": Math.round(r.skus['sku_200ml_jeera'] || 0),
-        "JUICE 300/500/600 ML": Math.round(r.skus['sku_juice_misc'] || 0),
-        "1 Ltr": Math.round(r.skus['sku_1ltr'] || 0),
-        "2 Ltr": val2L,
-        "Coconut Water": Math.round(r.skus['sku_coconut'] || 0),
-        "MC2": Math.round(r.skus['sku_mc2'] || 0),
-        "D1 CAN ENERGY DRINK/ BASIL SEEDS": Math.round(r.skus['sku_d1_energy'] || 0),
-        "Total Order Quantity (in )": Math.round(r.totalQuantity),
-        "Total Order Value ( in Amount)": Math.round(r.totalValue)
+        "160 ML Juice": fmt(Math.round(r.skus['sku_160ml'] || 0)),
+        "APPLE SPARKEL 200 ML": fmt(Math.round(r.skus['sku_apple_sparkel'] || 0)),
+        "Nimbu Soda 200 ml": fmt(Math.round(r.skus['sku_nimbu_soda'] || 0)),
+        "Nimbu Pani 300 ml": fmt(Math.round(r.skus['sku_nimbu_pani'] || 0)),
+        "Mr. Fresh Zeera": fmt(Math.round(r.skus['sku_200ml_jeera'] || 0)),
+        "JUICE 300/500/600 ML": fmt(Math.round(r.skus['sku_juice_misc'] || 0)),
+        "1 Ltr": fmt(Math.round(r.skus['sku_1ltr'] || 0)),
+        "2 Ltr": fmt(val2L),
+        "Coconut Water": fmt(Math.round(r.skus['sku_coconut'] || 0)),
+        "MC2": fmt(Math.round(r.skus['sku_mc2'] || 0)),
+        "D1 CAN ENERGY DRINK/ BASIL SEEDS": fmt(Math.round(r.skus['sku_d1_energy'] || 0)),
+        "Total Order Quantity (in )": fmt(Math.round(r.totalQuantity)),
+        "Total Order Value ( in Amount)": fmt(Math.round(r.totalValue))
       };
     });
   };
@@ -589,7 +620,7 @@ export default function App() {
           )}
 
           {step === ReportStep.PC_ENTRY && (
-            <div className="p-8">
+            <div className="p-8 pb-48">
               <div className="mb-8 flex justify-between items-center">
                 <h2 className="text-2xl font-black text-slate-800 uppercase italic">Phase 2: Productive Detail</h2>
                 <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">WhatsApp Text Mode</div>
@@ -654,6 +685,43 @@ export default function App() {
                 <button onClick={() => setStep(ReportStep.TC_ENTRY)} className="font-black text-slate-400 uppercase text-xs tracking-widest hover:text-indigo-600 transition">Back to TC</button>
                 <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-2xl uppercase text-xs hover:bg-indigo-700 transition">VIEW F2 REPORT</button>
               </div>
+
+              {/* LIVE SKU TOTALS STICKY FOOTER */}
+              <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white shadow-2xl border-t-4 border-indigo-500 z-50">
+                {/* Summary Header */}
+                <div className="bg-indigo-900 px-4 py-2 flex justify-between items-center border-b border-indigo-700">
+                    <div className="flex gap-4 md:gap-8">
+                        <div className="flex flex-col md:flex-row md:items-center md:gap-2">
+                           <span className="text-[9px] text-indigo-300 font-black uppercase tracking-widest">Productive Calls</span>
+                           <span className="text-lg font-black text-white leading-none">{liveStats.pcCount}</span>
+                        </div>
+                        <div className="flex flex-col md:flex-row md:items-center md:gap-2">
+                           <span className="text-[9px] text-indigo-300 font-black uppercase tracking-widest">Total Qty</span>
+                           <span className="text-lg font-black text-yellow-400 leading-none">{liveStats.totalQty}</span>
+                        </div>
+                        <div className="flex flex-col md:flex-row md:items-center md:gap-2">
+                           <span className="text-[9px] text-indigo-300 font-black uppercase tracking-widest">Total Value</span>
+                           <span className="text-lg font-black text-emerald-400 leading-none">₹{liveStats.totalVal.toLocaleString()}</span>
+                        </div>
+                    </div>
+                    <div className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest hidden md:block">
+                        Live Dashboard
+                    </div>
+                </div>
+
+                {/* SKU Scroll List */}
+                <div className="p-3 bg-slate-900">
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-slate-800">
+                    {SKU_LIST.map(sku => (
+                      <div key={sku.id} className={`flex flex-col items-center min-w-[70px] p-2 rounded-lg border transition-all ${liveStats.totals[sku.id] > 0 ? 'bg-indigo-900/50 border-indigo-500 shadow-lg scale-100' : 'bg-slate-800 border-slate-700 opacity-50 scale-95'}`}>
+                        <span className="text-[8px] text-slate-400 font-bold uppercase whitespace-nowrap truncate w-full text-center">{sku.label}</span>
+                        <span className={`text-sm font-black mt-1 ${liveStats.totals[sku.id] > 0 ? 'text-white' : 'text-slate-600'}`}>{liveStats.totals[sku.id]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
             </div>
           )}
 
