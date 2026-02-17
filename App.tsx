@@ -510,15 +510,21 @@ export default function App() {
   const exportMasterReport = () => {
     const wb = XLSX.utils.book_new();
     
+    // Preparation of Data
+    const finalF1 = getF1ExportRows();
+    const finalF2 = getF2ExportRows();
+
     // F1 Sheet
-    const f1Sheet = XLSX.utils.json_to_sheet(getF1ExportRows());
+    const f1Sheet = XLSX.utils.json_to_sheet(finalF1);
     XLSX.utils.book_append_sheet(wb, f1Sheet, "F1 Summary");
     
     // F2 Sheet
-    const f2Sheet = XLSX.utils.json_to_sheet(getF2ExportRows());
+    const f2Sheet = XLSX.utils.json_to_sheet(finalF2);
     XLSX.utils.book_append_sheet(wb, f2Sheet, "F2 Daily Sales");
     
-    XLSX.writeFile(wb, `Final_Sales_Report_${currentDate.replace(/\//g, '-')}.xlsx`);
+    const fName = `Final_Sales_Report_${currentDate.replace(/\//g, '-')}.xlsx`;
+    
+    XLSX.writeFile(wb, fName);
   };
 
   return (
@@ -825,10 +831,11 @@ export default function App() {
                 <i className="fas fa-check-double text-6xl text-indigo-400 mb-6 animate-pulse"></i>
                 <h3 className="text-2xl font-black uppercase mb-2 tracking-widest">Reports Finalized</h3>
                 <p className="text-indigo-200 font-bold mb-10 opacity-90 italic">Data accurately extracted and distributed.</p>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 px-4">
                   <button onClick={copyWhatsAppSummary} className="bg-green-600 text-white px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0 text-[10px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP SUMMARY</button>
                   
-                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[10px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> MASTER EXCEL</button>
+                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[10px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> EXPORT MASTER XLSX</button>
 
                   <button onClick={handleReset} className="px-6 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-indigo-500 hover:bg-indigo-800 transition-colors flex items-center justify-center gap-2">NEW REPORT</button>
                 </div>
