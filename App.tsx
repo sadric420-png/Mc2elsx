@@ -23,6 +23,9 @@ export default function App() {
   // Input states for TC Entry
   const [newOutletName, setNewOutletName] = useState('');
   const [newOutletContact, setNewOutletContact] = useState('');
+  
+  // Global Beat Name State
+  const [beatName, setBeatName] = useState('');
 
   // KM states for F1 (Kept in state but not used in calculation as per request)
   const [openingKm, setOpeningKm] = useState('12450');
@@ -76,6 +79,7 @@ export default function App() {
       setNewOutletContact('');
       setPastedText('');
       setBulkPasteText('');
+      setBeatName('');
     }
   };
 
@@ -414,6 +418,7 @@ export default function App() {
     
     return {
       ...o,
+      beatName: beatName || o.beatName, // Apply global beat name if set
       date: currentDate,
       salesPerson: REPORTING_CONSTANTS.SALES_PERSON,
       desig: REPORTING_CONSTANTS.DESIGNATION,
@@ -423,7 +428,7 @@ export default function App() {
       totalQuantity: Math.round(totalQuantity),
       totalValue: Math.round(totalValue)
     };
-  }), [outlets, currentDate]);
+  }), [outlets, currentDate, beatName]);
 
   const f1Data: F1Row[] = useMemo(() => {
     const totalTC = outlets.length;
@@ -589,6 +594,23 @@ export default function App() {
                 <div className="flex gap-2">
                   <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" ref={fileInputRef} />
                   <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg uppercase tracking-widest hover:bg-emerald-700 transition"><i className="fas fa-file-excel mr-2"></i> IMPORT TC XLSX</button>
+                </div>
+              </div>
+
+              {/* BEAT NAME INPUT */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 flex items-center gap-4 shadow-sm">
+                <div className="flex-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Beat / Market Name</label>
+                    <input 
+                        type="text" 
+                        value={beatName} 
+                        onChange={(e) => setBeatName(e.target.value)} 
+                        placeholder="Enter Today's Beat Name (e.g. Civil Lines)"
+                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-700 focus:border-indigo-500 outline-none uppercase"
+                    />
+                </div>
+                <div className="text-xs text-slate-400 font-medium italic max-w-xs hidden md:block">
+                    * This name will appear in the F2 Report column.
                 </div>
               </div>
 
