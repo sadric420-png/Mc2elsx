@@ -26,6 +26,7 @@ export default function App() {
   
   // Global Beat Name State
   const [beatName, setBeatName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // KM states for F1 (Kept in state but not used in calculation as per request)
   const [openingKm, setOpeningKm] = useState('12450');
@@ -33,6 +34,15 @@ export default function App() {
 
   // Normalizer: Removes spaces and lowercases for fuzzy matching. Defined early for reuse.
   const normalize = (str: string) => str ? str.toLowerCase().replace(/[\s\-_.]/g, '') : '';
+
+  const filteredOutlets = useMemo(() => {
+    if (!searchQuery) return outlets;
+    const lowerQuery = searchQuery.toLowerCase();
+    return outlets.filter(o => 
+      o.name.toLowerCase().includes(lowerQuery) || 
+      o.contactNo.includes(lowerQuery)
+    );
+  }, [outlets, searchQuery]);
 
   // Live SKU Totals for PC Entry
   const liveSkuTotals = useMemo(() => {
@@ -80,6 +90,7 @@ export default function App() {
       setPastedText('');
       setBulkPasteText('');
       setBeatName('');
+      setSearchQuery('');
     }
   };
 
@@ -577,7 +588,7 @@ export default function App() {
             { id: ReportStep.F2_PREVIEW, label: "F2 RESULT", icon: "fa-table" },
             { id: ReportStep.F1_PREVIEW, label: "F1 SUMMARY", icon: "fa-file-alt" }
           ].map((s) => (
-            <button key={s.id} onClick={() => (outlets.length > 0 || s.id === ReportStep.TC_ENTRY) && setStep(s.id)} className={`flex flex-col items-center transition ${step === s.id ? 'scale-110' : 'opacity-50 hover:opacity-100'}`}>
+            <button key={s.id} onClick={() => { if (outlets.length > 0 || s.id === ReportStep.TC_ENTRY) { setStep(s.id); setSearchQuery(''); } }} className={`flex flex-col items-center transition ${step === s.id ? 'scale-110' : 'opacity-50 hover:opacity-100'}`}>
               <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 shadow-sm ${step === s.id ? 'bg-indigo-600 border-indigo-200 text-white' : 'bg-white border-slate-200 text-slate-400'}`}>
                 <i className={`fas ${s.icon}`}></i>
               </div>
@@ -645,13 +656,24 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mt-10 rounded-xl overflow-hidden border border-slate-200">
+              <div className="mt-10 mb-6 relative">
+                <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input 
+                  type="text" 
+                  placeholder="Search Party Name or Number..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 focus:border-indigo-500 outline-none font-bold text-slate-700 shadow-sm"
+                />
+              </div>
+
+              <div className="rounded-xl overflow-hidden border border-slate-200">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
                     <tr><th className="p-4">#</th><th className="p-4">OUTLET NAME</th><th className="p-4">CONTACT</th><th className="p-4 text-right">ACTION</th></tr>
                   </thead>
                   <tbody className="divide-y text-sm font-bold">
-                    {outlets.map((o, i) => (
+                    {filteredOutlets.map((o, i) => (
                       <tr key={o.id} className="hover:bg-indigo-50/50 transition">
                         <td className="p-4 text-slate-400 font-mono">{i + 1}</td>
                         <td className="p-4 uppercase">{o.name}</td>
@@ -659,14 +681,14 @@ export default function App() {
                         <td className="p-4 text-right"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600"><i className="fas fa-trash-alt"></i></button></td>
                       </tr>
                     ))}
-                    {outlets.length === 0 && (
-                      <tr><td colSpan={4} className="p-20 text-center text-slate-300 uppercase font-black tracking-widest opacity-30 text-2xl italic">Empty Call List</td></tr>
+                    {filteredOutlets.length === 0 && (
+                      <tr><td colSpan={4} className="p-20 text-center text-slate-300 uppercase font-black tracking-widest opacity-30 text-2xl italic">{outlets.length === 0 ? "Empty Call List" : "No results found"}</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
               <div className="mt-10 flex justify-end">
-                <button disabled={outlets.length === 0} onClick={() => setStep(ReportStep.PC_ENTRY)} className={`px-12 py-4 rounded-2xl font-black text-white shadow-2xl flex items-center gap-3 transition ${outlets.length === 0 ? 'bg-slate-300' : 'bg-indigo-600 hover:bg-indigo-700'}`}>NEXT: FILL PC & SKUs <i className="fas fa-arrow-right"></i></button>
+                <button disabled={outlets.length === 0} onClick={() => { setStep(ReportStep.PC_ENTRY); setSearchQuery(''); }} className={`px-12 py-4 rounded-2xl font-black text-white shadow-2xl flex items-center gap-3 transition ${outlets.length === 0 ? 'bg-slate-300' : 'bg-indigo-600 hover:bg-indigo-700'}`}>NEXT: FILL PC & SKUs <i className="fas fa-arrow-right"></i></button>
               </div>
             </div>
           )}
@@ -701,8 +723,19 @@ export default function App() {
                 </button>
               </div>
 
+              <div className="mb-6 relative">
+                <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input 
+                  type="text" 
+                  placeholder="Search Party Name or Number..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 focus:border-indigo-500 outline-none font-bold text-slate-700 shadow-sm"
+                />
+              </div>
+
               <div className="space-y-6">
-                {outlets.map((o) => (
+                {filteredOutlets.map((o) => (
                   <div key={o.id} className={`border-2 rounded-2xl overflow-hidden transition-all duration-300 ${o.isProductive ? 'border-green-300 shadow-xl bg-white' : 'border-slate-100 bg-slate-50'}`}>
                     <div className={`p-5 flex items-center justify-between ${o.isProductive ? 'bg-green-50/50' : ''}`}>
                       <div className="flex items-center gap-4">
@@ -734,8 +767,8 @@ export default function App() {
                 ))}
               </div>
               <div className="mt-12 flex justify-between items-center border-t pt-8">
-                <button onClick={() => setStep(ReportStep.TC_ENTRY)} className="font-black text-slate-400 uppercase text-xs tracking-widest hover:text-indigo-600 transition">Back to TC</button>
-                <button onClick={() => setStep(ReportStep.F2_PREVIEW)} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-2xl uppercase text-xs hover:bg-indigo-700 transition">VIEW F2 REPORT</button>
+                <button onClick={() => { setStep(ReportStep.TC_ENTRY); setSearchQuery(''); }} className="font-black text-slate-400 uppercase text-xs tracking-widest hover:text-indigo-600 transition">Back to TC</button>
+                <button onClick={() => { setStep(ReportStep.F2_PREVIEW); setSearchQuery(''); }} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-2xl uppercase text-xs hover:bg-indigo-700 transition">VIEW F2 REPORT</button>
               </div>
 
               {/* LIVE SKU TOTALS STICKY FOOTER */}
