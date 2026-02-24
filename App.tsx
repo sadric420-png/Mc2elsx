@@ -48,7 +48,7 @@ export default function App() {
   const liveSkuTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     SKU_LIST.forEach(sku => totals[sku.id] = 0);
-    outlets.forEach(o => {
+    outlets.forEach((o: Outlet) => {
       if (o.isProductive) {
          Object.entries(o.skus).forEach(([key, val]) => {
              // Explicit cast to number to fix potential 'unknown' type inference error
@@ -68,7 +68,7 @@ export default function App() {
     let box = 0;
     let val = 0;
     
-    outlets.forEach(o => {
+    outlets.forEach((o: Outlet) => {
       if (o.isProductive) {
         pc++;
         SKU_LIST.forEach(sku => {
@@ -91,6 +91,8 @@ export default function App() {
       setBulkPasteText('');
       setBeatName('');
       setSearchQuery('');
+      setOpeningKm('12450');
+      setClosingKm('12510');
     }
   };
 
@@ -104,7 +106,7 @@ export default function App() {
     const nName = normalize(newOutletName);
     const nContact = normalize(newOutletContact);
     
-    const isDuplicate = outlets.some(o => {
+    const isDuplicate = outlets.some((o: Outlet) => {
       const existingName = normalize(o.name);
       const existingContact = normalize(o.contactNo);
       return existingName === nName || (nContact && existingContact === nContact);
@@ -139,7 +141,7 @@ export default function App() {
     const rows = bulkPasteText.split(/\r?\n/);
     const newOutlets: Outlet[] = [];
     
-    rows.forEach(row => {
+    rows.forEach((row: string) => {
         // Excel copy usually separates columns with tabs
         let parts = row.split('\t');
         
@@ -168,8 +170,8 @@ export default function App() {
 
     if (newOutlets.length > 0) {
         // Deduplication Logic
-        const seenNames = new Set(outlets.map(o => normalize(o.name)));
-        const seenContacts = new Set(outlets.map(o => normalize(o.contactNo)));
+        const seenNames = new Set(outlets.map((o: Outlet) => normalize(o.name)));
+        const seenContacts = new Set(outlets.map((o: Outlet) => normalize(o.contactNo)));
         
         const uniqueNewOutlets = newOutlets.filter(o => {
             const nName = normalize(o.name);
@@ -187,7 +189,7 @@ export default function App() {
         const duplicatesRemoved = newOutlets.length - uniqueNewOutlets.length;
 
         if (uniqueNewOutlets.length > 0) {
-            setOutlets(prev => [...prev, ...uniqueNewOutlets]);
+            setOutlets((prev: Outlet[]) => [...prev, ...uniqueNewOutlets]);
             setBulkPasteText('');
             alert(`Successfully added ${uniqueNewOutlets.length} outlets! \n(${duplicatesRemoved} duplicates removed automatically)`);
         } else {
@@ -230,7 +232,7 @@ export default function App() {
         fullText += `\n--- [PDF Page ${i}] ---\n` + pageText;
       }
 
-      setPastedText(prev => prev ? prev + "\n" + fullText : fullText);
+      setPastedText((prev: string) => prev ? prev + "\n" + fullText : fullText);
       
       if (pdfInputRef.current) pdfInputRef.current.value = '';
       alert(`PDF Successfully Read! ${pdf.numPages} pages extracted.\nThe text has been added to the box below. Click 'AUTO-FILL' to process.`);
@@ -262,29 +264,50 @@ export default function App() {
       const findExistingOutlet = (name: string, contact: string) => {
          const nName = normalize(name);
          const nContact = normalize(contact);
-         return outlets.find(o => {
-             const existName = normalize(o.name);
-             const existContact = normalize(o.contactNo);
-             return (nContact.length > 5 && existContact === nContact) || 
-                    (nName.length > 3 && existName.includes(nName)); // Name includes logic
-         });
+         
+         // 1. Try exact contact match (highest priority)
+         if (nContact.length > 5) {
+             const byContact = outlets.find((o: Outlet) => normalize(o.contactNo) === nContact);
+             if (byContact) return byContact;
+         }
+         
+         // 2. Try exact name match
+         const byExactName = outlets.find((o: Outlet) => normalize(o.name) === nName);
+         if (byExactName) return byExactName;
+         
+         // 3. Try partial name match (only if name is long enough to be unique-ish)
+         if (nName.length > 5) {
+             return outlets.find((o: Outlet) => {
+                 const existName = normalize(o.name);
+                 return existName.includes(nName) || nName.includes(existName);
+             });
+         }
+         return undefined;
       };
 
       // We will iterate through blocks and map them to outlets (existing or new)
       const outletSkuMap: Record<string, Record<string, number>> = {};
 
-      invoiceBlocks.forEach(block => {
+      invoiceBlocks.forEach((block: string) => {
          if (block.trim().length < 10) return; // Skip noise
 
          // Attempt to extract Name/Contact from the block itself
          // Heuristic: The first line that isn't a known SKU or keyword
-         const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+         const lines = block.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
          let extractedName = "";
          
          for (const line of lines) {
              const lower = line.toLowerCase();
-             // Skip obvious non-name lines
-             if (lower.includes('invoice') || lower.includes('bill') || lower.match(/\d{2}\/\d{2}/) || SKU_LIST.some(s => lower.includes(s.label.toLowerCase()))) {
+             // Skip obvious non-name lines (Invoices, Bills, Dates, SKUs, etc.)
+             if (
+                 lower.includes('invoice') || 
+                 lower.includes('bill') || 
+                 lower.match(/\d{2}\/\d{2}/) || 
+                 lower.match(/fy\d{2}/) || // Skip FY25, FY24 etc.
+                 lower.match(/inv-\d+/) || // Skip INV-101 etc.
+                 lower.match(/^\d+$/) ||   // Skip lines with only numbers
+                 SKU_LIST.some(s => lower.includes(s.label.toLowerCase()))
+             ) {
                  continue;
              }
              // Assume the first valid line is the name
@@ -396,8 +419,8 @@ export default function App() {
       }));
 
       // Deduplication for Imported Excel
-      const seenNames = new Set(outlets.map(o => normalize(o.name)));
-      const seenContacts = new Set(outlets.map(o => normalize(o.contactNo)));
+      const seenNames = new Set(outlets.map((o: Outlet) => normalize(o.name)));
+      const seenContacts = new Set(outlets.map((o: Outlet) => normalize(o.contactNo)));
       
       const uniqueImported = imported.filter(o => {
           const nName = normalize(o.name);
@@ -415,7 +438,7 @@ export default function App() {
          alert(`Imported ${uniqueImported.length} unique outlets. Removed ${imported.length - uniqueImported.length} duplicates.`);
       }
 
-      setOutlets(prev => [...prev, ...uniqueImported]);
+      setOutlets((prev: Outlet[]) => [...prev, ...uniqueImported]);
     };
     reader.readAsBinaryString(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -443,10 +466,16 @@ export default function App() {
 
   const f1Data: F1Row[] = useMemo(() => {
     const totalTC = outlets.length;
-    const totalPC = outlets.filter(o => o.isProductive).length;
+    const totalPC = outlets.filter((o: Outlet) => o.isProductive).length;
     const totalQty = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalQuantity, 0);
     const totalVal = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalValue, 0);
     
+    // Calculate total for each SKU across all outlets
+    const totalSkuCounts: Record<string, number> = {};
+    SKU_LIST.forEach(sku => {
+      totalSkuCounts[sku.id] = outlets.reduce((acc: number, o: Outlet) => acc + Math.round(o.skus[sku.id] || 0), 0);
+    });
+
     // Calculate Average Price per Box (Handling division by zero)
     const avgPricePerBox = totalQty > 0 ? totalVal / totalQty : 0;
 
@@ -454,6 +483,7 @@ export default function App() {
     let remainingPC = totalPC;
     let remainingQty = totalQty;
     let remainingVal = totalVal;
+    const remainingSkus = { ...totalSkuCounts };
 
     return TIME_SLOTS.map((slot, i) => {
       const isLast = i === TIME_SLOTS.length - 1;
@@ -461,7 +491,17 @@ export default function App() {
       // Calculate Counts using subtraction method to ensure exact integer matches for sum
       let tc = isLast ? remainingTC : Math.round(totalTC * slot.ratio);
       let pc = isLast ? remainingPC : Math.round(totalPC * slot.ratio);
-      let qty = isLast ? remainingQty : Math.round(totalQty * slot.ratio);
+      
+      // SKU Distribution
+      const slotSkus: Record<string, number> = {};
+      SKU_LIST.forEach(sku => {
+        const qty = isLast ? remainingSkus[sku.id] : Math.round(totalSkuCounts[sku.id] * slot.ratio);
+        slotSkus[sku.id] = qty;
+        remainingSkus[sku.id] -= qty;
+      });
+
+      // Total Qty for this slot is the sum of slotSkus
+      let qty = Object.values(slotSkus).reduce((a, b) => a + b, 0);
       
       // Calculate Value based on Quantity in this slot * Avg Price to ensure "Box-Value Sync"
       // If last slot, we prioritize Grand Total match
@@ -481,6 +521,7 @@ export default function App() {
         pc, 
         salesInBox: qty, 
         salesValue: val, 
+        skus: slotSkus,
         dbConfirmation: "OK",
         openingKm: "", 
         closingKm: ""
@@ -497,18 +538,28 @@ export default function App() {
   };
 
   const getF1ExportRows = () => {
-    return f1Data.map(r => ({
-      "DATE": r.date,
-      "TIME": r.timeSlot,
-      "Name of SO/TSI": r.name,
-      "TC": r.tc,
-      "PC": r.pc,
-      "SALES IN BOX": Math.round(r.salesInBox),
-      "SALES VALUE": Math.round(r.salesValue),
-      "DB Confirmation aboutOrder Receiveng & Dispatch Status": r.dbConfirmation,
-      "OPENING KM": "", 
-      "CLOSING KM": ""
-    }));
+    return f1Data.map(r => {
+      const row: any = {
+        "DATE": r.date,
+        "TIME": r.timeSlot,
+        "Name of SO/TSI": r.name,
+        "TC": r.tc,
+        "PC": r.pc,
+      };
+
+      // Add SKU columns to F1 Export
+      SKU_LIST.forEach(sku => {
+        row[sku.label] = r.skus[sku.id] || 0;
+      });
+
+      row["SALES IN BOX"] = Math.round(r.salesInBox);
+      row["SALES VALUE"] = Math.round(r.salesValue);
+      row["DB Confirmation aboutOrder Receiveng & Dispatch Status"] = r.dbConfirmation;
+      row["OPENING KM"] = "";
+      row["CLOSING KM"] = "";
+
+      return row;
+    });
   };
 
   const getF2ExportRows = () => {
@@ -874,10 +925,22 @@ export default function App() {
                 <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-1">Automated 30%:40%:30% Ratio Logic</p>
               </div>
 
-              <div className="max-w-4xl mx-auto overflow-hidden rounded-3xl border-8 border-slate-50 shadow-2xl mb-12">
-                <table className="w-full text-left">
+              <div className="max-w-full overflow-x-auto rounded-3xl border-8 border-slate-50 shadow-2xl mb-12">
+                <table className="w-full text-left min-w-[1500px]">
                   <thead className="bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest">
-                    <tr><th className="p-6">DATE</th><th className="p-6">TIME</th><th className="p-6">Name of SO/TSI</th><th className="p-6 text-center">TC</th><th className="p-6 text-center">PC</th><th className="p-6 text-center">SALES IN BOX</th><th className="p-6 text-right">SALES VALUE</th><th className="p-6">DB Confirmation...</th><th className="p-6">OPENING KM</th><th className="p-6">CLOSING KM</th></tr>
+                    <tr>
+                      <th className="p-6">DATE</th>
+                      <th className="p-6">TIME</th>
+                      <th className="p-6">Name of SO/TSI</th>
+                      <th className="p-6 text-center">TC</th>
+                      <th className="p-6 text-center">PC</th>
+                      {SKU_LIST.map(s => <th key={s.id} className="p-6 text-center border-x border-slate-800">{s.label}</th>)}
+                      <th className="p-6 text-center">SALES IN BOX</th>
+                      <th className="p-6 text-right">SALES VALUE</th>
+                      <th className="p-6">DB Confirmation...</th>
+                      <th className="p-6">OPENING KM</th>
+                      <th className="p-6">CLOSING KM</th>
+                    </tr>
                   </thead>
                   <tbody className="text-sm font-black divide-y">
                     {f1Data.map((r, i) => (
@@ -887,6 +950,11 @@ export default function App() {
                         <td className="p-6 text-slate-500 uppercase">{r.name}</td>
                         <td className="p-6 text-center text-slate-400 font-mono">{r.tc}</td>
                         <td className="p-6 text-center text-green-600 font-mono">{r.pc}</td>
+                        {SKU_LIST.map(s => (
+                          <td key={s.id} className={`p-6 text-center font-mono border-x border-slate-100 ${r.skus[s.id] > 0 ? 'text-indigo-600 bg-indigo-50/30' : 'text-slate-300'}`}>
+                            {r.skus[s.id] || 0}
+                          </td>
+                        ))}
                         <td className="p-6 text-center font-mono">{r.salesInBox.toFixed(0)}</td>
                         <td className="p-6 text-right text-emerald-700 font-black">₹{r.salesValue.toLocaleString()}</td>
                         <td className="p-6 text-center text-slate-400 text-[10px]">{r.dbConfirmation}</td>
@@ -897,9 +965,14 @@ export default function App() {
                     ))}
                     <tr className="bg-slate-900 text-white font-black uppercase italic">
                       <td colSpan={3} className="p-6 text-right tracking-widest">GRAND TOTAL</td>
-                      <td className="p-6 text-center">{f1Data.reduce((a: number, b: F1Row) => a + b.tc, 0)}</td>
-                      <td className="p-6 text-center text-green-400">{f1Data.reduce((a: number, b: F1Row) => a + b.pc, 0)}</td>
-                      <td className="p-6 text-center">{f1Data.reduce((a: number, b: F1Row) => a + b.salesInBox, 0).toFixed(0)}</td>
+                      <td className="p-6 text-center font-mono">{f1Data.reduce((a: number, b: F1Row) => a + b.tc, 0)}</td>
+                      <td className="p-6 text-center font-mono text-green-400">{f1Data.reduce((a: number, b: F1Row) => a + b.pc, 0)}</td>
+                      {SKU_LIST.map(s => (
+                        <td key={s.id} className="p-6 text-center font-mono text-indigo-300">
+                          {f1Data.reduce((acc, r) => acc + r.skus[s.id], 0)}
+                        </td>
+                      ))}
+                      <td className="p-6 text-center font-mono">{f1Data.reduce((a: number, b: F1Row) => a + b.salesInBox, 0).toFixed(0)}</td>
                       <td className="p-6 text-right text-indigo-300">₹{f1Data.reduce((a: number, b: F1Row) => a + b.salesValue, 0).toLocaleString()}</td>
                       <td colSpan={3}></td>
                     </tr>

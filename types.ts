@@ -35,6 +35,7 @@ export interface F1Row {
   pc: number;
   salesInBox: number;
   salesValue: number;
+  skus: Record<string, number>;
   dbConfirmation: string;
   openingKm: string;
   closingKm: string;

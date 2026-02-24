@@ -1,4 +1,3 @@
-
 {
   "name": "sales-ops-automation-hub",
   "version": "4.2.0",
@@ -7,17 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "pdfjs-dist": "4.10.38",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "xlsx": "0.18.5",
-    "pdfjs-dist": "4.10.38",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.3",
     "vite": "^6.0.0"
   },
   "engines": {
