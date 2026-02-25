@@ -545,18 +545,12 @@ export default function App() {
         "Name of SO/TSI": r.name,
         "TC": r.tc,
         "PC": r.pc,
+        "SALES IN BOX": Math.round(r.salesInBox),
+        "SALES VALUE": Math.round(r.salesValue),
+        "DB Confirmation aboutOrder Receiveng & Dispatch Status": r.dbConfirmation,
+        "OPENING KM": r.openingKm || "",
+        "CLOSING KM": r.closingKm || ""
       };
-
-      // Add SKU columns to F1 Export
-      SKU_LIST.forEach(sku => {
-        row[sku.label] = r.skus[sku.id] || 0;
-      });
-
-      row["SALES IN BOX"] = Math.round(r.salesInBox);
-      row["SALES VALUE"] = Math.round(r.salesValue);
-      row["DB Confirmation aboutOrder Receiveng & Dispatch Status"] = r.dbConfirmation;
-      row["OPENING KM"] = "";
-      row["CLOSING KM"] = "";
 
       return row;
     });
@@ -934,10 +928,9 @@ export default function App() {
                       <th className="p-6">Name of SO/TSI</th>
                       <th className="p-6 text-center">TC</th>
                       <th className="p-6 text-center">PC</th>
-                      {SKU_LIST.map(s => <th key={s.id} className="p-6 text-center border-x border-slate-800">{s.label}</th>)}
                       <th className="p-6 text-center">SALES IN BOX</th>
                       <th className="p-6 text-right">SALES VALUE</th>
-                      <th className="p-6">DB Confirmation...</th>
+                      <th className="p-6">DB Confirmation aboutOrder Receiveng & Dispatch Status</th>
                       <th className="p-6">OPENING KM</th>
                       <th className="p-6">CLOSING KM</th>
                     </tr>
@@ -950,15 +943,9 @@ export default function App() {
                         <td className="p-6 text-slate-500 uppercase">{r.name}</td>
                         <td className="p-6 text-center text-slate-400 font-mono">{r.tc}</td>
                         <td className="p-6 text-center text-green-600 font-mono">{r.pc}</td>
-                        {SKU_LIST.map(s => (
-                          <td key={s.id} className={`p-6 text-center font-mono border-x border-slate-100 ${r.skus[s.id] > 0 ? 'text-indigo-600 bg-indigo-50/30' : 'text-slate-300'}`}>
-                            {r.skus[s.id] || 0}
-                          </td>
-                        ))}
                         <td className="p-6 text-center font-mono">{r.salesInBox.toFixed(0)}</td>
                         <td className="p-6 text-right text-emerald-700 font-black">₹{r.salesValue.toLocaleString()}</td>
                         <td className="p-6 text-center text-slate-400 text-[10px]">{r.dbConfirmation}</td>
-                        {/* KM Columns are intentionally empty as per user request */}
                         <td className="p-6 text-center text-slate-300 italic">{r.openingKm || "-"}</td>
                         <td className="p-6 text-center text-slate-300 italic">{r.closingKm || "-"}</td>
                       </tr>
@@ -967,11 +954,6 @@ export default function App() {
                       <td colSpan={3} className="p-6 text-right tracking-widest">GRAND TOTAL</td>
                       <td className="p-6 text-center font-mono">{f1Data.reduce((a: number, b: F1Row) => a + b.tc, 0)}</td>
                       <td className="p-6 text-center font-mono text-green-400">{f1Data.reduce((a: number, b: F1Row) => a + b.pc, 0)}</td>
-                      {SKU_LIST.map(s => (
-                        <td key={s.id} className="p-6 text-center font-mono text-indigo-300">
-                          {f1Data.reduce((acc, r) => acc + r.skus[s.id], 0)}
-                        </td>
-                      ))}
                       <td className="p-6 text-center font-mono">{f1Data.reduce((a: number, b: F1Row) => a + b.salesInBox, 0).toFixed(0)}</td>
                       <td className="p-6 text-right text-indigo-300">₹{f1Data.reduce((a: number, b: F1Row) => a + b.salesValue, 0).toLocaleString()}</td>
                       <td colSpan={3}></td>
