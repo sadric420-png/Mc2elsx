@@ -773,18 +773,18 @@ export default function App() {
                 />
               </div>
 
-              <div className="rounded-xl overflow-hidden border border-slate-200">
-                <table className="w-full text-left">
+              <div className="rounded-xl border border-slate-200 overflow-x-auto">
+                <table className="w-full text-left min-w-[600px] md:min-w-full">
                   <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
-                    <tr><th className="p-4">#</th><th className="p-4">OUTLET NAME</th><th className="p-4">CONTACT</th><th className="p-4 text-right">ACTION</th></tr>
+                    <tr><th className="p-3 md:p-4">#</th><th className="p-3 md:p-4">OUTLET NAME</th><th className="p-3 md:p-4">CONTACT</th><th className="p-3 md:p-4 text-right">ACTION</th></tr>
                   </thead>
                   <tbody className="divide-y text-sm font-bold">
                     {filteredOutlets.map((o, i) => (
                       <tr key={o.id} className="hover:bg-indigo-50/50 transition">
-                        <td className="p-4 text-slate-400 font-mono">{i + 1}</td>
-                        <td className="p-4 uppercase">{o.name}</td>
-                        <td className="p-4">{o.contactNo}</td>
-                        <td className="p-4 text-right"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600"><i className="fas fa-trash-alt"></i></button></td>
+                        <td className="p-3 md:p-4 text-slate-400 font-mono">{i + 1}</td>
+                        <td className="p-3 md:p-4 uppercase">{o.name}</td>
+                        <td className="p-3 md:p-4">{o.contactNo}</td>
+                        <td className="p-3 md:p-4 text-right"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600 px-2"><i className="fas fa-trash-alt"></i></button></td>
                       </tr>
                     ))}
                     {filteredOutlets.length === 0 && (
