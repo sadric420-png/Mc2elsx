@@ -466,24 +466,52 @@ export default function App() {
 
   const f1Data: F1Row[] = useMemo(() => {
     const totalTC = outlets.length;
+    const productiveOutlets = outlets.filter(o => o.isProductive);
+    const nonProductiveOutlets = outlets.filter(o => !o.isProductive);
     
-    // Calculate split indices based on Time Slot ratios (30% - 40% - 30%)
-    // We split the actual OUTLETS list to simulate time-based entry
-    let currentIndex = 0;
+    const totalPC = productiveOutlets.length;
     
+    // KM Calculation Setup
+    const startKm = parseInt(openingKm) || 0;
+    const endKm = parseInt(closingKm) || 0;
+    const totalDistance = Math.max(0, endKm - startKm);
+    let currentKm = startKm;
+
+    // Track indices to distribute outlets
+    let prodIdx = 0;
+    let nonProdIdx = 0;
+
     return TIME_SLOTS.map((slot, i) => {
       const isLast = i === TIME_SLOTS.length - 1;
       
-      // Determine how many outlets belong to this slot
-      // If it's the last slot, take all remaining outlets
-      const countForSlot = isLast ? (totalTC - currentIndex) : Math.round(totalTC * slot.ratio);
-      const nextIndex = currentIndex + countForSlot;
+      // Calculate Target PC for this slot
+      let targetPC = isLast ? (totalPC - prodIdx) : Math.round(totalPC * slot.ratio);
       
-      // Get the specific outlets for this time slot
-      const slotOutlets = outlets.slice(currentIndex, nextIndex);
+      // Calculate Target TC for this slot
+      let targetTC = isLast ? (totalTC - (prodIdx + nonProdIdx)) : Math.round(totalTC * slot.ratio);
       
-      // Update index for next iteration
-      currentIndex = nextIndex;
+      // Determine Non-Productive count needed to reach Target TC
+      let targetNonProd = targetTC - targetPC;
+      
+      // Safety Adjustments (in case of rounding weirdness or running out of outlets)
+      if (prodIdx + targetPC > totalPC) targetPC = totalPC - prodIdx;
+      if (nonProdIdx + targetNonProd > nonProductiveOutlets.length) targetNonProd = nonProductiveOutlets.length - nonProdIdx;
+      
+      // If last slot, force take all remaining
+      if (isLast) {
+          targetPC = totalPC - prodIdx;
+          targetNonProd = nonProductiveOutlets.length - nonProdIdx;
+      }
+
+      // Get outlets for this slot
+      const slotProd = productiveOutlets.slice(prodIdx, prodIdx + targetPC);
+      const slotNonProd = nonProductiveOutlets.slice(nonProdIdx, nonProdIdx + targetNonProd);
+      
+      const slotOutlets = [...slotProd, ...slotNonProd];
+      
+      // Update indices
+      prodIdx += targetPC;
+      nonProdIdx += targetNonProd;
 
       // Calculate metrics strictly from these outlets
       const tc = slotOutlets.length;
@@ -514,6 +542,16 @@ export default function App() {
         }
       });
 
+      // KM Distribution for this slot
+      const slotDistance = totalTC > 0 
+          ? Math.round(totalDistance * (tc / totalTC))
+          : 0;
+      
+      const slotOpeningKm = currentKm;
+      const slotClosingKm = isLast ? endKm : (currentKm + slotDistance);
+      
+      currentKm = slotClosingKm;
+
       return {
         date: currentDate, 
         timeSlot: slot.label, 
@@ -524,11 +562,11 @@ export default function App() {
         salesValue: Math.round(salesValue), 
         skus: slotSkus,
         dbConfirmation: "OK",
-        openingKm: "", 
-        closingKm: ""
+        openingKm: slotOpeningKm.toString(), 
+        closingKm: slotClosingKm.toString()
       };
     });
-  }, [outlets, currentDate]);
+  }, [outlets, currentDate, openingKm, closingKm]);
 
   const copyWhatsAppSummary = () => {
     const totalTC = outlets.length;
@@ -654,21 +692,36 @@ export default function App() {
                 </div>
               </div>
 
-              {/* BEAT NAME INPUT */}
-              <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 flex items-center gap-4 shadow-sm">
-                <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Beat / Market Name</label>
-                    <input 
-                        type="text" 
-                        value={beatName} 
-                        onChange={(e) => setBeatName(e.target.value)} 
-                        placeholder="Enter Today's Beat Name (e.g. Civil Lines)"
-                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-700 focus:border-indigo-500 outline-none uppercase"
-                    />
-                </div>
-                <div className="text-xs text-slate-400 font-medium italic max-w-xs hidden md:block">
-                    * This name will appear in the F2 Report column.
-                </div>
+              {/* BEAT NAME & KM INPUTS */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col shadow-sm">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Beat / Market Name</label>
+                      <input 
+                          type="text" 
+                          value={beatName} 
+                          onChange={(e) => setBeatName(e.target.value)} 
+                          placeholder="Enter Beat Name"
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-700 focus:border-indigo-500 outline-none uppercase"
+                      />
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col shadow-sm">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Opening KM</label>
+                      <input 
+                          type="number" 
+                          value={openingKm} 
+                          onChange={(e) => setOpeningKm(e.target.value)} 
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                      />
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col shadow-sm">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Closing KM</label>
+                      <input 
+                          type="number" 
+                          value={closingKm} 
+                          onChange={(e) => setClosingKm(e.target.value)} 
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-700 focus:border-indigo-500 outline-none"
+                      />
+                  </div>
               </div>
 
               {/* NEW: Bulk Paste Section */}
