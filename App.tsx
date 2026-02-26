@@ -848,9 +848,14 @@ export default function App() {
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-sm ${o.isProductive ? 'bg-green-600' : 'bg-slate-400'}`}>{o.name[0]}</div>
                         <div><h4 className="font-black text-slate-800 uppercase text-xs">{o.name}</h4><p className="text-[10px] text-slate-500 font-bold">{o.contactNo}</p></div>
                       </div>
-                      <button onClick={() => setOutlets(outlets.map(x => x.id === o.id ? { ...x, isProductive: !x.isProductive } : x))} className={`px-4 py-2 rounded-full font-black text-[10px] uppercase transition ${o.isProductive ? 'bg-green-600 text-white shadow-lg' : 'bg-white text-slate-400 border shadow-sm'}`}>
-                        {o.isProductive ? 'Productive ✓' : 'Non-Productive'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setOutlets(outlets.map(x => x.id === o.id ? { ...x, isProductive: !x.isProductive } : x))} className={`px-4 py-2 rounded-full font-black text-[10px] uppercase transition ${o.isProductive ? 'bg-green-600 text-white shadow-lg' : 'bg-white text-slate-400 border shadow-sm'}`}>
+                          {o.isProductive ? 'Productive ✓' : 'Non-Productive'}
+                        </button>
+                        <button onClick={() => { if(window.confirm('Are you sure you want to delete this outlet?')) setOutlets(outlets.filter(x => x.id !== o.id)); }} className="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition">
+                          <i className="fas fa-trash-alt text-xs"></i>
+                        </button>
+                      </div>
                     </div>
                     {o.isProductive && (
                       <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 bg-slate-900 border-t-2 border-green-200">
