@@ -466,52 +466,53 @@ export default function App() {
 
   const f1Data: F1Row[] = useMemo(() => {
     const totalTC = outlets.length;
-    const totalPC = outlets.filter((o: Outlet) => o.isProductive).length;
-    const totalQty = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalQuantity, 0);
-    const totalVal = f2Data.reduce((acc: number, r: F2Row) => acc + r.totalValue, 0);
     
-    // Calculate total for each SKU across all outlets
-    const totalSkuCounts: Record<string, number> = {};
-    SKU_LIST.forEach(sku => {
-      totalSkuCounts[sku.id] = outlets.reduce((acc: number, o: Outlet) => acc + Math.round(o.skus[sku.id] || 0), 0);
-    });
-
-    // Calculate Average Price per Box (Handling division by zero)
-    const avgPricePerBox = totalQty > 0 ? totalVal / totalQty : 0;
-
-    let remainingTC = totalTC;
-    let remainingPC = totalPC;
-    let remainingQty = totalQty;
-    let remainingVal = totalVal;
-    const remainingSkus = { ...totalSkuCounts };
-
+    // Calculate split indices based on Time Slot ratios (30% - 40% - 30%)
+    // We split the actual OUTLETS list to simulate time-based entry
+    let currentIndex = 0;
+    
     return TIME_SLOTS.map((slot, i) => {
       const isLast = i === TIME_SLOTS.length - 1;
-
-      // Calculate Counts using subtraction method to ensure exact integer matches for sum
-      let tc = isLast ? remainingTC : Math.round(totalTC * slot.ratio);
-      let pc = isLast ? remainingPC : Math.round(totalPC * slot.ratio);
       
-      // SKU Distribution
+      // Determine how many outlets belong to this slot
+      // If it's the last slot, take all remaining outlets
+      const countForSlot = isLast ? (totalTC - currentIndex) : Math.round(totalTC * slot.ratio);
+      const nextIndex = currentIndex + countForSlot;
+      
+      // Get the specific outlets for this time slot
+      const slotOutlets = outlets.slice(currentIndex, nextIndex);
+      
+      // Update index for next iteration
+      currentIndex = nextIndex;
+
+      // Calculate metrics strictly from these outlets
+      const tc = slotOutlets.length;
+      const pc = slotOutlets.filter(o => o.isProductive).length;
+      
+      // Calculate Sales & Value for this slot's outlets
+      let salesInBox = 0;
+      let salesValue = 0;
       const slotSkus: Record<string, number> = {};
-      SKU_LIST.forEach(sku => {
-        const qty = isLast ? remainingSkus[sku.id] : Math.round(totalSkuCounts[sku.id] * slot.ratio);
-        slotSkus[sku.id] = qty;
-        remainingSkus[sku.id] -= qty;
-      });
 
-      // Total Qty for this slot is the sum of slotSkus
-      let qty = Object.values(slotSkus).reduce((a, b) => a + b, 0);
-      
-      // Calculate Value based on Quantity in this slot * Avg Price to ensure "Box-Value Sync"
-      // If last slot, we prioritize Grand Total match
-      let val = isLast ? remainingVal : Math.round(qty * avgPricePerBox);
-      
-      // Update remainders
-      remainingTC -= tc;
-      remainingPC -= pc;
-      remainingQty -= qty;
-      remainingVal -= val;
+      // Initialize SKU counts
+      SKU_LIST.forEach(sku => slotSkus[sku.id] = 0);
+
+      slotOutlets.forEach(o => {
+        if (o.isProductive) {
+           // Calculate Box Count
+           const boxCount = (Object.values(o.skus) as number[]).reduce((a, b) => a + Math.round(b), 0);
+           salesInBox += boxCount;
+
+           // Calculate Value
+           const val = SKU_LIST.reduce((acc, sku) => acc + (Math.round(o.skus[sku.id]) * sku.price), 0);
+           salesValue += val;
+
+           // Accumulate SKU counts
+           SKU_LIST.forEach(sku => {
+             slotSkus[sku.id] += Math.round(o.skus[sku.id] || 0);
+           });
+        }
+      });
 
       return {
         date: currentDate, 
@@ -519,15 +520,15 @@ export default function App() {
         name: REPORTING_CONSTANTS.SALES_PERSON,
         tc, 
         pc, 
-        salesInBox: qty, 
-        salesValue: val, 
+        salesInBox: Math.round(salesInBox), 
+        salesValue: Math.round(salesValue), 
         skus: slotSkus,
         dbConfirmation: "OK",
         openingKm: "", 
         closingKm: ""
       };
     });
-  }, [outlets, f2Data, currentDate]);
+  }, [outlets, currentDate]);
 
   const copyWhatsAppSummary = () => {
     const totalTC = outlets.length;
