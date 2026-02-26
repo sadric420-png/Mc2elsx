@@ -484,36 +484,43 @@ export default function App() {
     return TIME_SLOTS.map((slot, i) => {
       const isLast = i === TIME_SLOTS.length - 1;
       
-      // Calculate Target PC for this slot
+      // 1. Distribute PC First (Priority: 30-40-30 Ratio)
       let targetPC = isLast ? (totalPC - prodIdx) : Math.round(totalPC * slot.ratio);
       
-      // Calculate Target TC for this slot
+      // 2. Distribute TC (Ratio)
       let targetTC = isLast ? (totalTC - (prodIdx + nonProdIdx)) : Math.round(totalTC * slot.ratio);
       
-      // Determine Non-Productive count needed to reach Target TC
+      // Safety: TC cannot be less than PC in any slot
+      if (targetTC < targetPC) {
+          targetTC = targetPC;
+      }
+      
+      // 3. Fill remainder with Non-Productive
       let targetNonProd = targetTC - targetPC;
       
-      // Safety Adjustments (in case of rounding weirdness or running out of outlets)
+      // Boundary Checks
       if (prodIdx + targetPC > totalPC) targetPC = totalPC - prodIdx;
       if (nonProdIdx + targetNonProd > nonProductiveOutlets.length) targetNonProd = nonProductiveOutlets.length - nonProdIdx;
       
-      // If last slot, force take all remaining
+      // Last slot cleanup to ensure we use exactly all outlets
       if (isLast) {
           targetPC = totalPC - prodIdx;
           targetNonProd = nonProductiveOutlets.length - nonProdIdx;
+          targetTC = targetPC + targetNonProd;
       }
 
-      // Get outlets for this slot
+      // Get specific outlets for this slot
+      // This ensures that "Sales in Box" and "Value" match the specific PCs assigned here
       const slotProd = productiveOutlets.slice(prodIdx, prodIdx + targetPC);
       const slotNonProd = nonProductiveOutlets.slice(nonProdIdx, nonProdIdx + targetNonProd);
       
       const slotOutlets = [...slotProd, ...slotNonProd];
       
-      // Update indices
+      // Update indices for next slot
       prodIdx += targetPC;
       nonProdIdx += targetNonProd;
 
-      // Calculate metrics strictly from these outlets
+      // Calculate metrics strictly from these specific outlets
       const tc = slotOutlets.length;
       const pc = slotOutlets.filter(o => o.isProductive).length;
       
@@ -527,15 +534,15 @@ export default function App() {
 
       slotOutlets.forEach(o => {
         if (o.isProductive) {
-           // Calculate Box Count
+           // Calculate Box Count (Sum of all SKUs for this outlet)
            const boxCount = (Object.values(o.skus) as number[]).reduce((a, b) => a + Math.round(b), 0);
            salesInBox += boxCount;
 
-           // Calculate Value
+           // Calculate Value (Sum of Price * Qty for this outlet)
            const val = SKU_LIST.reduce((acc, sku) => acc + (Math.round(o.skus[sku.id]) * sku.price), 0);
            salesValue += val;
 
-           // Accumulate SKU counts
+           // Accumulate SKU counts for this slot
            SKU_LIST.forEach(sku => {
              slotSkus[sku.id] += Math.round(o.skus[sku.id] || 0);
            });
