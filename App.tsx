@@ -553,12 +553,86 @@ export default function App() {
     });
   }, [outlets, currentDate, openingKm, closingKm]);
 
-  const copyWhatsAppSummary = () => {
+  const copyWhatsAppReport1 = () => {
+    let reportText = "report 1 watsapp format\n\n";
+    
+    f1Data.forEach((slot, index) => {
+      reportText += `Tc=${slot.tc}\n`;
+      reportText += `Pc-${slot.pc}\n`;
+      reportText += `Cs-${slot.salesInBox}\n`;
+      reportText += `Vl-${slot.salesValue}\n\n`;
+    });
+
+    const totalMc2 = outlets.reduce((acc, o) => acc + (o.isProductive ? Math.round(o.skus['sku_mc2'] || 0) : 0), 0);
+    const totalSale = f2Data.reduce((acc, r) => acc + r.totalValue, 0);
+
+    reportText += `Mc2= ${totalMc2}\n`;
+    reportText += `Total sale= ${totalSale}`;
+
+    navigator.clipboard.writeText(reportText).then(() => alert("Report 1 Copied!"));
+  };
+
+  const copyWhatsAppReport2 = () => {
     const totalTC = outlets.length;
     const totalPC = outlets.filter(o => o.isProductive).length;
-    const totalVal = f2Data.reduce((acc: number, r) => acc + r.totalValue, 0);
-    const summaryText = `📊 *DAILY SALES REPORT*\n📅 Date: ${currentDate}\n👤 SO: ${REPORTING_CONSTANTS.SALES_PERSON}\n\n📞 *Calls:* TC: ${totalTC} | PC: ${totalPC}\n💰 *Value:* ₹${totalVal.toLocaleString()}\n📍 *Travel:* KM ${openingKm} to ${closingKm}\n\n✅ *Report Verified.*`;
-    navigator.clipboard.writeText(summaryText).then(() => alert("Summary Copied!"));
+    const totalVal = f2Data.reduce((acc, r) => acc + r.totalValue, 0);
+    
+    const getSkuTotal = (id: string) => outlets.reduce((acc, o) => acc + (o.isProductive ? Math.round(o.skus[id] || 0) : 0), 0);
+    
+    const mc2 = getSkuTotal('sku_mc2');
+    const twoLtr = getSkuTotal('sku_2l_mix') + getSkuTotal('sku_2l_lichi') + getSkuTotal('sku_2l_guava') + getSkuTotal('sku_2l_mango');
+    const sixHundred = getSkuTotal('sku_juice_misc');
+    const threeHundred = getSkuTotal('sku_nimbu_pani');
+    const oneSixty = getSkuTotal('sku_160ml');
+    const zeera = getSkuTotal('sku_200ml_jeera');
+    const appy = getSkuTotal('sku_apple_sparkel');
+    const totalBox = outlets.reduce((acc, o) => {
+        if (!o.isProductive) return acc;
+        return acc + Object.values(o.skus).reduce((a, b) => a + Math.round(b), 0);
+    }, 0);
+
+    const reportText = `report 2 watsapp format:
+Date ${currentDate}
+
+Name of SO/TSI:- ${REPORTING_CONSTANTS.SALES_PERSON}
+
+Headquarter.. ${REPORTING_CONSTANTS.CITY}
+
+Today Beat : ${beatName || "Main Beat"}
+
+Today Target
+
+Mc2  35 case
+
+2lt 5 
+600ml 3
+300ml 10
+160ml 25
+
+Zeera 25
+Appy 25
+
+
+TC 50
+PC .25
+
+Today’s Achievement 
+
+TC : ${totalTC}
+PC : ${totalPC}
+
+Total Mc2 Box : ${mc2}
+2lt : ${twoLtr}
+600ml : ${sixHundred}
+300ml : ${threeHundred}
+160ml : ${oneSixty}
+Zeera : ${zeera}
+Appy : ${appy}
+
+Total Box : ${totalBox}
+Total Value : ${totalVal}`;
+
+    navigator.clipboard.writeText(reportText).then(() => alert("Report 2 Copied!"));
   };
 
   const getF1ExportRows = () => {
@@ -1002,12 +1076,13 @@ export default function App() {
                 <i className="fas fa-check-double text-6xl text-indigo-400 mb-6 animate-pulse"></i>
                 <h3 className="text-2xl font-black uppercase mb-2 tracking-widest">Reports Finalized</h3>
                 <p className="text-indigo-200 font-bold mb-10 opacity-90 italic">Data accurately extracted and distributed.</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 px-4">
-                  <button onClick={copyWhatsAppSummary} className="bg-green-600 text-white px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0 text-[10px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP SUMMARY</button>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4">
+                  <button onClick={copyWhatsAppReport1} className="bg-green-600 text-white px-4 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0 text-[9px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP REPORT 1</button>
+                  <button onClick={copyWhatsAppReport2} className="bg-green-700 text-white px-4 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-600 transition-all border-b-4 border-green-900 active:translate-y-1 active:border-b-0 text-[9px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP REPORT 2</button>
                   
-                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-6 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[10px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> MASTER EXCEL</button>
+                  <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-4 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[9px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> MASTER EXCEL</button>
 
-                  <button onClick={handleReset} className="px-6 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-indigo-500 hover:bg-indigo-800 transition-colors flex items-center justify-center gap-2">NEW REPORT</button>
+                  <button onClick={handleReset} className="px-4 py-5 rounded-2xl font-black uppercase text-[9px] tracking-widest border-2 border-indigo-500 hover:bg-indigo-800 transition-colors flex items-center justify-center gap-2 col-span-full">NEW REPORT</button>
                 </div>
               </div>
             </div>
