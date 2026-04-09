@@ -22,7 +22,6 @@ export default function App() {
   
   // Input states for TC Entry
   const [newOutletName, setNewOutletName] = useState('');
-  const [newOutletContact, setNewOutletContact] = useState('');
   
   // Global Beat Name State
   const [beatName, setBeatName] = useState('');
@@ -39,8 +38,7 @@ export default function App() {
     if (!searchQuery) return outlets;
     const lowerQuery = searchQuery.toLowerCase();
     return outlets.filter(o => 
-      o.name.toLowerCase().includes(lowerQuery) || 
-      o.contactNo.includes(lowerQuery)
+      o.name.toLowerCase().includes(lowerQuery)
     );
   }, [outlets, searchQuery]);
 
@@ -86,7 +84,6 @@ export default function App() {
       setStep(ReportStep.TC_ENTRY);
       setOutlets([]);
       setNewOutletName('');
-      setNewOutletContact('');
       setPastedText('');
       setBulkPasteText('');
       setBeatName('');
@@ -97,30 +94,28 @@ export default function App() {
   };
 
   const handleAddOutlet = () => {
-    if (!newOutletName || !newOutletContact) {
-      alert("Outlet Name aur Contact No mandatory hai!");
+    if (!newOutletName) {
+      alert("Outlet Name mandatory hai!");
       return;
     }
 
     // Check for duplicates before adding
     const nName = normalize(newOutletName);
-    const nContact = normalize(newOutletContact);
     
     const isDuplicate = outlets.some((o: Outlet) => {
       const existingName = normalize(o.name);
-      const existingContact = normalize(o.contactNo);
-      return existingName === nName || (nContact && existingContact === nContact);
+      return existingName === nName;
     });
 
     if (isDuplicate) {
-      alert("Duplicate Warning: An outlet with this Name or Contact Number already exists!");
+      alert("Duplicate Warning: An outlet with this Name already exists!");
       return;
     }
 
     const newOutlet: Outlet = {
       id: uuidv4(),
       name: newOutletName.trim(),
-      contactNo: newOutletContact.trim(),
+      contactNo: "",
       isProductive: false,
       skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
       dbName: REPORTING_CONSTANTS.SS_NAME,
@@ -129,7 +124,6 @@ export default function App() {
     };
     setOutlets([...outlets, newOutlet]);
     setNewOutletName('');
-    setNewOutletContact('');
   };
 
   const handleBulkPaste = () => {
@@ -151,7 +145,6 @@ export default function App() {
         }
 
         const name = parts[0]?.trim();
-        const contact = parts[1]?.trim() || "";
 
         // Skip potential headers or empty lines
         if (!name || name.toLowerCase().includes('name of out let') || name.toLowerCase() === 'name') return;
@@ -159,7 +152,7 @@ export default function App() {
         newOutlets.push({
             id: uuidv4(),
             name: name,
-            contactNo: contact,
+            contactNo: "",
             isProductive: false,
             skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
             dbName: REPORTING_CONSTANTS.SS_NAME,
@@ -171,18 +164,14 @@ export default function App() {
     if (newOutlets.length > 0) {
         // Deduplication Logic
         const seenNames = new Set(outlets.map((o: Outlet) => normalize(o.name)));
-        const seenContacts = new Set(outlets.map((o: Outlet) => normalize(o.contactNo)));
         
         const uniqueNewOutlets = newOutlets.filter(o => {
             const nName = normalize(o.name);
-            const nContact = normalize(o.contactNo);
             
             // Check if exists in current list OR in the newly processed batch (self-duplication)
             if (seenNames.has(nName)) return false;
-            if (nContact && seenContacts.has(nContact)) return false;
             
             seenNames.add(nName);
-            if (nContact) seenContacts.add(nContact);
             return true;
         });
 
@@ -196,7 +185,7 @@ export default function App() {
             alert(`All ${newOutlets.length} outlets were duplicates and have been skipped.`);
         }
     } else {
-        alert("Could not parse data. Ensure you copied 'Name' and 'Contact' columns from Excel.");
+        alert("Could not parse data. Ensure you copied 'Name' column from Excel.");
     }
   };
 
@@ -261,21 +250,14 @@ export default function App() {
       // But we need to check against 'outlets' state for duplication
 
       // Helper to find existing outlet
-      const findExistingOutlet = (name: string, contact: string) => {
+      const findExistingOutlet = (name: string) => {
          const nName = normalize(name);
-         const nContact = normalize(contact);
          
-         // 1. Try exact contact match (highest priority)
-         if (nContact.length > 5) {
-             const byContact = outlets.find((o: Outlet) => normalize(o.contactNo) === nContact);
-             if (byContact) return byContact;
-         }
-         
-         // 2. Try exact name match
+         // 1. Try exact name match
          const byExactName = outlets.find((o: Outlet) => normalize(o.name) === nName);
          if (byExactName) return byExactName;
          
-         // 3. Try partial name match (only if name is long enough to be unique-ish)
+         // 2. Try partial name match (only if name is long enough to be unique-ish)
          if (nName.length > 5) {
              return outlets.find((o: Outlet) => {
                  const existName = normalize(o.name);
@@ -318,7 +300,7 @@ export default function App() {
          }
 
          // Try to find existing outlet
-         let matchedOutlet = findExistingOutlet(extractedName, ""); // Contact extraction from block is hard, relying on name
+         let matchedOutlet = findExistingOutlet(extractedName); // Contact extraction from block is hard, relying on name
          
          // If no match, create new (if we have a name)
          if (!matchedOutlet && extractedName) {
@@ -407,10 +389,10 @@ export default function App() {
       const workbook = XLSX.read(e.target?.result, { type: 'binary' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-      const imported = data.slice(1).filter(r => r[0] && r[1]).map(r => ({
+      const imported = data.slice(1).filter(r => r[0]).map(r => ({
         id: uuidv4(),
         name: String(r[0]),
-        contactNo: String(r[1]),
+        contactNo: "",
         isProductive: false,
         skus: SKU_LIST.reduce((acc: Record<string, number>, sku) => ({ ...acc, [sku.id]: 0 }), {}),
         dbName: r[2] || REPORTING_CONSTANTS.SS_NAME,
@@ -420,17 +402,13 @@ export default function App() {
 
       // Deduplication for Imported Excel
       const seenNames = new Set(outlets.map((o: Outlet) => normalize(o.name)));
-      const seenContacts = new Set(outlets.map((o: Outlet) => normalize(o.contactNo)));
       
       const uniqueImported = imported.filter(o => {
           const nName = normalize(o.name);
-          const nContact = normalize(o.contactNo);
           
           if (seenNames.has(nName)) return false;
-          if (nContact && seenContacts.has(nContact)) return false;
           
           seenNames.add(nName);
-          if (nContact) seenContacts.add(nContact);
           return true;
       });
 
@@ -626,7 +604,6 @@ export default function App() {
         "Beat Name": isFirst ? r.beatName : "",
         "Name of Out Let": r.name,
         "Contact Person Name": r.contactPerson,
-        "Contact No.": r.contactNo,
         "160 ML Juice": fmt(Math.round(r.skus['sku_160ml'] || 0)),
         "APPLE SPARKEL 200 ML": fmt(Math.round(r.skus['sku_apple_sparkel'] || 0)),
         "Nimbu Soda 200 ml": fmt(Math.round(r.skus['sku_nimbu_soda'] || 0)),
@@ -735,27 +712,23 @@ export default function App() {
               <div className="bg-slate-900 p-6 rounded-2xl border-4 border-indigo-600 shadow-2xl mb-8">
                 <div className="flex justify-between items-center mb-4">
                    <h3 className="text-white font-black uppercase tracking-widest text-sm"><i className="fas fa-paste mr-2"></i> Bulk Paste from Excel</h3>
-                   <span className="text-indigo-400 text-[10px] font-bold">Format: Name [Tab] Contact</span>
+                   <span className="text-indigo-400 text-[10px] font-bold">Format: Name Column</span>
                 </div>
                 <textarea
                   value={bulkPasteText}
                   onChange={e => setBulkPasteText(e.target.value)}
                   className="w-full h-32 bg-slate-800 text-white font-mono text-xs p-4 rounded-xl border-2 border-slate-700 focus:border-indigo-500 outline-none resize-y mb-4 placeholder-slate-600"
-                  placeholder={`Copy columns from Excel and paste here...\n\nExample:\nOm Sai Ram Shop    9876543210\nGupta General Store    8877665544`}
+                  placeholder={`Copy 'Name' column from Excel and paste here...\n\nExample:\nOm Sai Ram Shop\nGupta General Store`}
                 />
                 <button onClick={handleBulkPaste} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl hover:bg-indigo-500 transition shadow-xl uppercase text-xs border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0">
                   <i className="fas fa-upload mr-2"></i> UPLOAD PASTED DATA
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-100 p-6 rounded-2xl border-2 border-slate-200 shadow-inner">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-100 p-6 rounded-2xl border-2 border-slate-200 shadow-inner">
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Name of Out Let</label>
                   <input className="w-full p-3 bg-white text-slate-900 border border-slate-300 rounded-xl focus:border-indigo-400 outline-none transition font-bold" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} placeholder="Type Outlet Name..." />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Contact No.</label>
-                  <input className="w-full p-3 bg-white text-slate-900 border border-slate-300 rounded-xl focus:border-indigo-400 outline-none transition font-bold" value={newOutletContact} onChange={e => setNewOutletContact(e.target.value)} placeholder="Type Phone No..." />
                 </div>
                 <div className="flex items-end">
                   <button onClick={handleAddOutlet} className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl hover:bg-indigo-500 transition shadow-xl uppercase text-xs border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0"><i className="fas fa-plus mr-2"></i> ADD MANUALLY</button>
@@ -766,7 +739,7 @@ export default function App() {
                 <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                 <input 
                   type="text" 
-                  placeholder="Search Party Name or Number..." 
+                  placeholder="Search Party Name..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 focus:border-indigo-500 outline-none font-bold text-slate-700 shadow-sm"
@@ -774,16 +747,15 @@ export default function App() {
               </div>
 
               <div className="rounded-xl border border-slate-200 overflow-x-auto">
-                <table className="w-full text-left min-w-[600px] md:min-w-full">
+                <table className="w-full text-left min-w-[400px] md:min-w-full">
                   <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
-                    <tr><th className="p-3 md:p-4">#</th><th className="p-3 md:p-4">OUTLET NAME</th><th className="p-3 md:p-4">CONTACT</th><th className="p-3 md:p-4 text-right">ACTION</th></tr>
+                    <tr><th className="p-3 md:p-4">#</th><th className="p-3 md:p-4">OUTLET NAME</th><th className="p-3 md:p-4 text-right">ACTION</th></tr>
                   </thead>
                   <tbody className="divide-y text-sm font-bold">
                     {filteredOutlets.map((o, i) => (
                       <tr key={o.id} className="hover:bg-indigo-50/50 transition">
                         <td className="p-3 md:p-4 text-slate-400 font-mono">{i + 1}</td>
                         <td className="p-3 md:p-4 uppercase">{o.name}</td>
-                        <td className="p-3 md:p-4">{o.contactNo}</td>
                         <td className="p-3 md:p-4 text-right"><button onClick={() => setOutlets(outlets.filter(x => x.id !== o.id))} className="text-red-400 hover:text-red-600 px-2"><i className="fas fa-trash-alt"></i></button></td>
                       </tr>
                     ))}
@@ -833,7 +805,7 @@ export default function App() {
                 <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                 <input 
                   type="text" 
-                  placeholder="Search Party Name or Number..." 
+                  placeholder="Search Party Name..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 focus:border-indigo-500 outline-none font-bold text-slate-700 shadow-sm"
@@ -846,7 +818,7 @@ export default function App() {
                     <div className={`p-5 flex items-center justify-between ${o.isProductive ? 'bg-green-50/50' : ''}`}>
                       <div className="flex items-center gap-4">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-sm ${o.isProductive ? 'bg-green-600' : 'bg-slate-400'}`}>{o.name[0]}</div>
-                        <div><h4 className="font-black text-slate-800 uppercase text-xs">{o.name}</h4><p className="text-[10px] text-slate-500 font-bold">{o.contactNo}</p></div>
+                        <div><h4 className="font-black text-slate-800 uppercase text-xs">{o.name}</h4></div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => setOutlets(outlets.map(x => x.id === o.id ? { ...x, isProductive: !x.isProductive } : x))} className={`px-4 py-2 rounded-full font-black text-[10px] uppercase transition ${o.isProductive ? 'bg-green-600 text-white shadow-lg' : 'bg-white text-slate-400 border shadow-sm'}`}>
@@ -945,7 +917,6 @@ export default function App() {
                       <th className="p-4 border border-slate-700">DB Name</th>
                       <th className="p-4 border border-slate-700">Beat</th>
                       <th className="p-4 border border-slate-700 bg-slate-900 sticky left-[60px] shadow-xl">Outlet Name</th>
-                      <th className="p-4 border border-slate-700">Contact No.</th>
                       {SKU_LIST.map(s => <th key={s.id} className="p-4 border border-slate-700 text-center">{s.label}</th>)}
                       <th className="p-4 border border-slate-700 bg-emerald-900">Total Qty</th>
                       <th className="p-4 border border-slate-700 bg-emerald-900">Total Value</th>
@@ -963,7 +934,6 @@ export default function App() {
                         <td className="p-4 border">{r.dbName}</td>
                         <td className="p-4 border font-black text-indigo-700 uppercase">{r.beatName}</td>
                         <td className="p-4 border font-black uppercase bg-inherit sticky left-[60px] shadow-sm">{r.name}</td>
-                        <td className="p-4 border">{r.contactNo}</td>
                         {SKU_LIST.map(s => <td key={s.id} className={`p-4 border text-center font-black ${r.skus[s.id] > 0 ? 'text-indigo-600 bg-indigo-50/40' : 'text-slate-300'}`}>{r.skus[s.id] || '-'}</td>)}
                         <td className="p-4 border text-center bg-emerald-50 text-emerald-800 font-black">{r.totalQuantity}</td>
                         <td className="p-4 border text-right bg-emerald-50 text-emerald-800 font-black whitespace-nowrap">₹{r.totalValue.toLocaleString()}</td>
