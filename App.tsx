@@ -34,6 +34,24 @@ export default function App() {
   // Normalizer: Removes spaces and lowercases for fuzzy matching. Defined early for reuse.
   const normalize = (str: string) => str ? str.toLowerCase().replace(/[\s\-_.]/g, '') : '';
 
+  const mapAppReportSku = (line: string) => {
+    const lower = line.toLowerCase();
+    if (lower.includes('mc2 energy drink')) return 'sku_mc2';
+    if (lower.includes('litchi 2 ltr')) return 'sku_2l_lichi';
+    if (lower.includes('mix 2 ltr')) return 'sku_2l_mix';
+    if (lower.includes('guava 2 ltr')) return 'sku_2l_guava';
+    if (lower.includes('mango 2 ltr')) return 'sku_2l_mango';
+    if (lower.includes('apple sparkel')) return 'sku_apple_sparkel';
+    if (lower.includes('nimbu soda')) return 'sku_nimbu_soda';
+    if (lower.includes('nimbu pani')) return 'sku_nimbu_pani';
+    if (lower.includes('zeera')) return 'sku_200ml_jeera';
+    if (lower.includes('160 ml')) return 'sku_160ml';
+    if (lower.includes('1 ltr')) return 'sku_1ltr';
+    if (lower.includes('coconut')) return 'sku_coconut';
+    if (lower.includes('d1 can')) return 'sku_d1_energy';
+    return null;
+  };
+
   const filteredOutlets = useMemo(() => {
     if (!searchQuery) return outlets;
     const lowerQuery = searchQuery.toLowerCase();
@@ -236,6 +254,114 @@ export default function App() {
       alert("Please paste text from WhatsApp or Import a PDF first.");
       return;
     }
+
+    // --- NEW: App Summary Report Parser ---
+    if (pastedText.includes("Call Summary") && pastedText.includes("SKU Wise Details")) {
+      try {
+        const tcMatch = pastedText.match(/TC:\s*(\d+)/);
+        const pcMatch = pastedText.match(/PC:\s*(\d+)/);
+        
+        const targetTC = tcMatch ? parseInt(tcMatch[1]) : 0;
+        const targetPC = pcMatch ? parseInt(pcMatch[1]) : 0;
+
+        if (targetTC === 0) {
+          alert("Could not find TC count in summary.");
+          return;
+        }
+
+        // Extract SKU totals
+        const skuTotals: Record<string, number> = {};
+        const lines = pastedText.split('\n');
+        let inSkuSection = false;
+
+        lines.forEach(line => {
+          if (line.includes("SKU Wise Details")) {
+            inSkuSection = true;
+            return;
+          }
+          if (line.includes("TOTAL") && inSkuSection) {
+            inSkuSection = false;
+            return;
+          }
+
+          if (inSkuSection) {
+            const skuId = mapAppReportSku(line);
+            if (skuId) {
+              // Extract the 4 trailing numbers: [Sales Unit] [Sales StdUnit] [Sales SuperUnit] [Return]
+              // Example: ... 0 8 240 0 -> We want 8 (StdUnit/Cases)
+              const trailingNumbersMatch = line.match(/(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/);
+              if (trailingNumbersMatch) {
+                const qty = parseInt(trailingNumbersMatch[2]); 
+                skuTotals[skuId] = (skuTotals[skuId] || 0) + qty;
+              } else {
+                // Fallback: just find all numbers and take the 3rd from last if possible
+                const allNumbers = line.match(/\d+/g);
+                if (allNumbers && allNumbers.length >= 3) {
+                  const qty = parseInt(allNumbers[allNumbers.length - 3]);
+                  skuTotals[skuId] = (skuTotals[skuId] || 0) + qty;
+                }
+              }
+            }
+          }
+        });
+
+        // Update Outlets State
+        let currentOutlets = [...outlets];
+        
+        // 1. Pad outlets if needed
+        if (currentOutlets.length < targetTC) {
+          const needed = targetTC - currentOutlets.length;
+          for (let i = 0; i < needed; i++) {
+            currentOutlets.push({
+              id: uuidv4(),
+              name: `Outlet ${currentOutlets.length + 1}`,
+              contactNo: "",
+              isProductive: false,
+              skus: SKU_LIST.reduce((acc, s) => ({ ...acc, [s.id]: 0 }), {}),
+              dbName: REPORTING_CONSTANTS.SS_NAME,
+              beatName: "Main Beat",
+              contactPerson: "Owner"
+            });
+          }
+        }
+
+        // 2. Reset productivity and SKUs
+        currentOutlets = currentOutlets.map(o => ({
+          ...o,
+          isProductive: false,
+          skus: SKU_LIST.reduce((acc, s) => ({ ...acc, [s.id]: 0 }), {})
+        }));
+
+        // 3. Mark PC outlets
+        for (let i = 0; i < Math.min(targetPC, currentOutlets.length); i++) {
+          currentOutlets[i].isProductive = true;
+        }
+
+        // 4. Distribute SKU totals among PC outlets
+        const pcOutlets = currentOutlets.filter(o => o.isProductive);
+        if (pcOutlets.length > 0) {
+          Object.entries(skuTotals).forEach(([skuId, total]) => {
+            let remaining = total;
+            let idx = 0;
+            while (remaining > 0) {
+              pcOutlets[idx % pcOutlets.length].skus[skuId] += 1;
+              remaining--;
+              idx++;
+            }
+          });
+        }
+
+        setOutlets(currentOutlets);
+        setPastedText('');
+        alert(`Summary Processed Successfully!\nTC: ${targetTC}, PC: ${targetPC}\nSKUs distributed among productive outlets.`);
+        return;
+      } catch (err) {
+        console.error(err);
+        alert("Error parsing summary report.");
+        return;
+      }
+    }
+    // --- END: App Summary Report Parser ---
 
     try {
       // 1. SMART SPLIT: Divide Text into "Transaction Blocks"
