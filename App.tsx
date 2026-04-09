@@ -273,33 +273,35 @@ export default function App() {
         const skuTotals: Record<string, number> = {};
         const lines = pastedText.split('\n');
         let inSkuSection = false;
+        let currentSkuId: string | null = null;
 
         lines.forEach(line => {
-          if (line.includes("SKU Wise Details")) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) return;
+
+          if (trimmedLine.includes("SKU Wise Details")) {
             inSkuSection = true;
             return;
           }
-          if (line.includes("TOTAL") && inSkuSection) {
+          if (trimmedLine.includes("TOTAL") && inSkuSection) {
             inSkuSection = false;
             return;
           }
 
           if (inSkuSection) {
-            const skuId = mapAppReportSku(line);
-            if (skuId) {
+            const potentialSkuId = mapAppReportSku(trimmedLine);
+            if (potentialSkuId) {
+              currentSkuId = potentialSkuId;
+            }
+
+            if (currentSkuId) {
               // Extract the 4 trailing numbers: [Sales Unit] [Sales StdUnit] [Sales SuperUnit] [Return]
-              // Example: ... 0 8 240 0 -> We want 8 (StdUnit/Cases)
-              const trailingNumbersMatch = line.match(/(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/);
-              if (trailingNumbersMatch) {
-                const qty = parseInt(trailingNumbersMatch[2]); 
-                skuTotals[skuId] = (skuTotals[skuId] || 0) + qty;
-              } else {
-                // Fallback: just find all numbers and take the 3rd from last if possible
-                const allNumbers = line.match(/\d+/g);
-                if (allNumbers && allNumbers.length >= 3) {
-                  const qty = parseInt(allNumbers[allNumbers.length - 3]);
-                  skuTotals[skuId] = (skuTotals[skuId] || 0) + qty;
-                }
+              // Pattern: 4 numbers separated by spaces at the end of the line
+              const numbersMatch = trimmedLine.match(/(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/);
+              if (numbersMatch) {
+                const qty = parseInt(numbersMatch[2]); // StdUnit (Cases)
+                skuTotals[currentSkuId] = (skuTotals[currentSkuId] || 0) + qty;
+                currentSkuId = null; // Reset for next SKU
               }
             }
           }
