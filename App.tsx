@@ -554,7 +554,7 @@ export default function App() {
   }, [outlets, currentDate, openingKm, closingKm]);
 
   const copyWhatsAppReport1 = () => {
-    let reportText = "report 1 watsapp format\n\n";
+    let reportText = "";
     
     f1Data.forEach((slot, index) => {
       reportText += `Tc=${slot.tc}\n`;
@@ -591,8 +591,7 @@ export default function App() {
         return acc + Object.values(o.skus).reduce((a, b) => a + Math.round(b), 0);
     }, 0);
 
-    const reportText = `report 2 watsapp format:
-Date ${currentDate}
+    const reportText = `Date ${currentDate}
 
 Name of SO/TSI:- ${REPORTING_CONSTANTS.SALES_PERSON}
 
