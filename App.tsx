@@ -700,7 +700,7 @@ export default function App() {
     navigator.clipboard.writeText(reportText).then(() => alert("Report 1 Copied!"));
   };
 
-  const copyWhatsAppReport2 = () => {
+  const copyWhatsAppReport3 = () => {
     const totalTC = outlets.length;
     const totalPC = outlets.filter(o => o.isProductive).length;
     const totalVal = f2Data.reduce((acc, r) => acc + r.totalValue, 0);
@@ -709,57 +709,64 @@ export default function App() {
     
     const mc2 = getSkuTotal('sku_mc2');
     const twoLtr = getSkuTotal('sku_2l_mix') + getSkuTotal('sku_2l_lichi') + getSkuTotal('sku_2l_guava') + getSkuTotal('sku_2l_mango');
+    const oneLtr = getSkuTotal('sku_1ltr');
     const sixHundred = getSkuTotal('sku_juice_misc');
     const threeHundred = getSkuTotal('sku_nimbu_pani');
     const oneSixty = getSkuTotal('sku_160ml');
-    const zeera = getSkuTotal('sku_200ml_jeera');
     const appy = getSkuTotal('sku_apple_sparkel');
+    const zeera = getSkuTotal('sku_200ml_jeera');
+    const coconut = getSkuTotal('sku_coconut');
+    
     const totalBox = outlets.reduce((acc, o) => {
         if (!o.isProductive) return acc;
         return acc + Object.values(o.skus).reduce((a, b) => a + Math.round(b), 0);
     }, 0);
 
+    const productiveList = outlets.filter(o => o.isProductive && o.skus['sku_mc2'] > 0).slice(0, 3);
+
     const reportText = `Date ${currentDate}
 
-Name of SO/TSI:- ${REPORTING_CONSTANTS.SALES_PERSON}
+Name of SO/TSI.- ${REPORTING_CONSTANTS.SALES_PERSON}
 
-Headquarter.. ${REPORTING_CONSTANTS.CITY}
+Headquarter…${REPORTING_CONSTANTS.CITY}
 
 Today Beat : ${beatName || "Main Beat"}
 
-Today Target
+Today Target 
 
-Mc2  35 case
-
-2lt 5 
-600ml 3
-300ml 10
-160ml 25
-
-Zeera 25
-Appy 25
-
+Mc2  40 Case
 
 TC 50
-PC .25
+PC 20
+Amount : 20000
 
 Today’s Achievement 
 
 TC : ${totalTC}
-PC : ${totalPC}
+PC : ${totalPC} 
 
-Total Mc2 Box : ${mc2}
-2lt : ${twoLtr}
-600ml : ${sixHundred}
+Total Mc2 Box: ${mc2}
+
+2ltr juice Box: ${twoLtr}
+1lt Juice Box : ${oneLtr}
+600ml Box: ${sixHundred}
 300ml : ${threeHundred}
 160ml : ${oneSixty}
-Zeera : ${zeera}
-Appy : ${appy}
+Appy Box; ${appy}      
+Zeera Box=. : ${zeera} 
+20mrp Zeera Box : 0
+Coconut water: ${coconut}
+    
+Total Box: ${totalBox}     
+Total Value : ${totalVal}
 
-Total Box : ${totalBox}
-Total Value : ${totalVal}`;
+New Counter Active 
+Mc2 
+1 : 
+2: 
+3: `;
 
-    navigator.clipboard.writeText(reportText).then(() => alert("Report 2 Copied!"));
+    navigator.clipboard.writeText(reportText).then(() => alert("Report 3 Copied!"));
   };
 
   const getF1ExportRows = () => {
@@ -1205,7 +1212,7 @@ Total Value : ${totalVal}`;
                 <p className="text-indigo-200 font-bold mb-10 opacity-90 italic">Data accurately extracted and distributed.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4">
                   <button onClick={copyWhatsAppReport1} className="bg-green-600 text-white px-4 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-500 transition-all border-b-4 border-green-800 active:translate-y-1 active:border-b-0 text-[9px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP REPORT 1</button>
-                  <button onClick={copyWhatsAppReport2} className="bg-green-700 text-white px-4 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-600 transition-all border-b-4 border-green-900 active:translate-y-1 active:border-b-0 text-[9px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP REPORT 2</button>
+                  <button onClick={copyWhatsAppReport3} className="bg-green-800 text-white px-4 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest hover:bg-green-700 transition-all border-b-4 border-green-950 active:translate-y-1 active:border-b-0 text-[9px] flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-lg"></i> WHATSAPP REPORT 3</button>
                   
                   <button onClick={exportMasterReport} className="bg-white text-indigo-900 px-4 py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest border-b-4 border-slate-200 hover:scale-105 transition-all text-[9px] flex items-center justify-center gap-2"><i className="fas fa-file-excel text-lg"></i> MASTER EXCEL</button>
 
