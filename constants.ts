@@ -42,6 +42,7 @@ export const SKU_LIST: SKUDefinition[] = [
   // Nimbu / Lemon Series (Rate: 300)
   { id: 'sku_nimbu_soda', label: 'Nimbu Soda 200 ml', price: 300 }, 
   { id: 'sku_nimbu_pani', label: 'Nimbu Pani 300 ml', price: 300 },
+  { id: 'sku_300ml_juice', label: '300 ML Juice', price: 300 },
   
   // Juices & Others
   { id: 'sku_juice_misc', label: 'JUICE 300/500/600 ML', price: 300 },

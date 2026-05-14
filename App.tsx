@@ -44,6 +44,7 @@ export default function App() {
     if (lower.includes('apple sparkel')) return 'sku_apple_sparkel';
     if (lower.includes('nimbu soda')) return 'sku_nimbu_soda';
     if (lower.includes('nimbu pani')) return 'sku_nimbu_pani';
+    if (lower.includes('300 ml juice')) return 'sku_300ml_juice';
     if (lower.includes('zeera')) return 'sku_200ml_jeera';
     if (lower.includes('160 ml')) return 'sku_160ml';
     if (lower.includes('1 ltr')) return 'sku_1ltr';
@@ -711,7 +712,7 @@ export default function App() {
     const twoLtr = getSkuTotal('sku_2l_mix') + getSkuTotal('sku_2l_lichi') + getSkuTotal('sku_2l_guava') + getSkuTotal('sku_2l_mango');
     const oneLtr = getSkuTotal('sku_1ltr');
     const sixHundred = getSkuTotal('sku_juice_misc');
-    const threeHundred = getSkuTotal('sku_nimbu_pani');
+    const threeHundred = getSkuTotal('sku_nimbu_pani') + getSkuTotal('sku_300ml_juice');
     const oneSixty = getSkuTotal('sku_160ml');
     const appy = getSkuTotal('sku_apple_sparkel');
     const zeera = getSkuTotal('sku_200ml_jeera');
