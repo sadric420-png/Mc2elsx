@@ -36,13 +36,13 @@ export const SKU_LIST: SKUDefinition[] = [
 
   // Small Packs & Zeera
   { id: 'sku_200ml_jeera', label: '200ml jeera', price: 155 }, // Matches "Mr. Fresh Zeera" rate
-  { id: 'sku_apple_sparkel', label: 'APPLE SPARKEL 200 ML', price: 155 },
+  { id: 'sku_apple_sparkel', label: 'APPLE SPARKLE/EL', price: 155 },
   { id: 'sku_160ml', label: '160 ML Juice', price: 165 },
   
   // Nimbu / Lemon Series (Rate: 300)
   { id: 'sku_nimbu_soda', label: 'Nimbu Soda 200 ml', price: 300 }, 
   { id: 'sku_nimbu_pani', label: 'Nimbu Pani 300 ml', price: 300 },
-  { id: 'sku_300ml_juice', label: '300 ML Juice', price: 300 },
+  { id: 'sku_300ml_juice', label: '300 ML Juice (All)', price: 300 },
   
   // Juices & Others
   { id: 'sku_juice_misc', label: 'JUICE 300/500/600 ML', price: 300 },

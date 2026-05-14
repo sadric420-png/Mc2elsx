@@ -41,10 +41,10 @@ export default function App() {
     if (lower.includes('mix 2 ltr')) return 'sku_2l_mix';
     if (lower.includes('guava 2 ltr')) return 'sku_2l_guava';
     if (lower.includes('mango 2 ltr')) return 'sku_2l_mango';
-    if (lower.includes('apple sparkel')) return 'sku_apple_sparkel';
+    if (lower.includes('apple spark')) return 'sku_apple_sparkel'; // Handles sparkel and sparkle
     if (lower.includes('nimbu soda')) return 'sku_nimbu_soda';
     if (lower.includes('nimbu pani')) return 'sku_nimbu_pani';
-    if (lower.includes('300 ml juice')) return 'sku_300ml_juice';
+    if (lower.includes('300 ml')) return 'sku_300ml_juice'; // General 300ml catch-all
     if (lower.includes('zeera')) return 'sku_200ml_jeera';
     if (lower.includes('160 ml')) return 'sku_160ml';
     if (lower.includes('1 ltr')) return 'sku_1ltr';
