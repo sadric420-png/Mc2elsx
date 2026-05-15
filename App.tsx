@@ -584,9 +584,16 @@ export default function App() {
     const totalDistance = Math.max(0, endKm - startKm);
     let currentKm = startKm;
 
-    // Track indices to distribute outlets
+    // 3. Track cumulative metrics for strict ratio-based distribution
     let prodIdx = 0;
     let nonProdIdx = 0;
+    let distributedBoxes = 0;
+    let distributedValue = 0;
+
+    const totalBoxes = productiveOutlets.reduce((acc, o) => 
+      acc + Object.values(o.skus).reduce((a, b) => a + Math.round(b), 0), 0);
+    const totalVal = productiveOutlets.reduce((acc, o) => 
+      acc + SKU_LIST.reduce((subAcc, sku) => subAcc + (Math.round(o.skus[sku.id]) * sku.price), 0), 0);
 
     return TIME_SLOTS.map((slot, i) => {
       const isLast = i === TIME_SLOTS.length - 1;
@@ -598,9 +605,7 @@ export default function App() {
       let targetTC = isLast ? (totalTC - (prodIdx + nonProdIdx)) : Math.round(totalTC * slot.ratio);
       
       // Safety: TC cannot be less than PC in any slot
-      if (targetTC < targetPC) {
-          targetTC = targetPC;
-      }
+      if (targetTC < targetPC) targetTC = targetPC;
       
       // 3. Fill remainder with Non-Productive
       let targetNonProd = targetTC - targetPC;
@@ -609,50 +614,38 @@ export default function App() {
       if (prodIdx + targetPC > totalPC) targetPC = totalPC - prodIdx;
       if (nonProdIdx + targetNonProd > nonProductiveOutlets.length) targetNonProd = nonProductiveOutlets.length - nonProdIdx;
       
-      // Last slot cleanup to ensure we use exactly all outlets
       if (isLast) {
           targetPC = totalPC - prodIdx;
           targetNonProd = nonProductiveOutlets.length - nonProdIdx;
           targetTC = targetPC + targetNonProd;
       }
 
-      // Get specific outlets for this slot
-      // This ensures that "Sales in Box" and "Value" match the specific PCs assigned here
       const slotProd = productiveOutlets.slice(prodIdx, prodIdx + targetPC);
       const slotNonProd = nonProductiveOutlets.slice(nonProdIdx, nonProdIdx + targetNonProd);
-      
       const slotOutlets = [...slotProd, ...slotNonProd];
       
-      // Update indices for next slot
       prodIdx += targetPC;
       nonProdIdx += targetNonProd;
 
-      // Calculate metrics strictly from these specific outlets
       const tc = slotOutlets.length;
       const pc = slotOutlets.filter(o => o.isProductive).length;
       
-      // Calculate Sales & Value for this slot's outlets
-      let salesInBox = 0;
-      let salesValue = 0;
+      // Calculate Sales & Value strictly by ratio of the DAY'S TOTAL
+      // This ensures the 30% 40% 30% split matches accurately for the volume/value too
+      const salesInBox = isLast ? (totalBoxes - distributedBoxes) : Math.round(totalBoxes * slot.ratio);
+      const salesValue = isLast ? (totalVal - distributedValue) : Math.round(totalVal * slot.ratio);
+      
+      distributedBoxes += salesInBox;
+      distributedValue += salesValue;
+
+      // Still track SKUs from assigned outlets for consistency if needed elsewhere
       const slotSkus: Record<string, number> = {};
-
-      // Initialize SKU counts
       SKU_LIST.forEach(sku => slotSkus[sku.id] = 0);
-
       slotOutlets.forEach(o => {
         if (o.isProductive) {
-           // Calculate Box Count (Sum of all SKUs for this outlet)
-           const boxCount = (Object.values(o.skus) as number[]).reduce((a, b) => a + Math.round(b), 0);
-           salesInBox += boxCount;
-
-           // Calculate Value (Sum of Price * Qty for this outlet)
-           const val = SKU_LIST.reduce((acc, sku) => acc + (Math.round(o.skus[sku.id]) * sku.price), 0);
-           salesValue += val;
-
-           // Accumulate SKU counts for this slot
-           SKU_LIST.forEach(sku => {
-             slotSkus[sku.id] += Math.round(o.skus[sku.id] || 0);
-           });
+             SKU_LIST.forEach(sku => {
+                 slotSkus[sku.id] += Math.round(o.skus[sku.id] || 0);
+             });
         }
       });
 
@@ -684,29 +677,43 @@ export default function App() {
 
   const copyWhatsAppReport1 = () => {
     let reportText = "";
+    let sumTC = 0;
+    let sumPC = 0;
+    let sumCs = 0;
+    let sumVl = 0;
     
-    f1Data.forEach((slot, index) => {
+    f1Data.forEach((slot) => {
       reportText += `Tc=${slot.tc}\n`;
       reportText += `Pc-${slot.pc}\n`;
       reportText += `Cs-${slot.salesInBox}\n`;
       reportText += `Vl-${slot.salesValue}\n\n`;
+      
+      sumTC += slot.tc;
+      sumPC += slot.pc;
+      sumCs += slot.salesInBox;
+      sumVl += slot.salesValue;
     });
 
     const totalMc2 = outlets.reduce((acc, o) => acc + (o.isProductive ? Math.round(o.skus['sku_mc2'] || 0) : 0), 0);
-    const totalSale = f2Data.reduce((acc, r) => acc + r.totalValue, 0);
 
     reportText += `Mc2= ${totalMc2}\n`;
-    reportText += `Total sale= ${totalSale}`;
+    reportText += `Total Cs= ${sumCs}\n`;
+    reportText += `Total sale= ${sumVl}`;
 
     navigator.clipboard.writeText(reportText).then(() => alert("Report 1 Copied!"));
   };
 
   const copyWhatsAppReport3 = () => {
     const totalTC = outlets.length;
-    const totalPC = outlets.filter(o => o.isProductive).length;
-    const totalVal = f2Data.reduce((acc, r) => acc + r.totalValue, 0);
+    const productiveOutlets = outlets.filter(o => o.isProductive);
+    const totalPC = productiveOutlets.length;
     
     const getSkuTotal = (id: string) => outlets.reduce((acc, o) => acc + (o.isProductive ? Math.round(o.skus[id] || 0) : 0), 0);
+    
+    // Calculate total value only for productive outlets to match slot totals
+    const totalVal = productiveOutlets.reduce((acc, o) => {
+        return acc + SKU_LIST.reduce((subAcc, sku) => subAcc + (Math.round(o.skus[sku.id]) * sku.price), 0);
+    }, 0);
     
     const mc2 = getSkuTotal('sku_mc2');
     const twoLtr = getSkuTotal('sku_2l_mix') + getSkuTotal('sku_2l_lichi') + getSkuTotal('sku_2l_guava') + getSkuTotal('sku_2l_mango');
